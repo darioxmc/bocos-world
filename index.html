@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <title>Boco's World</title>
+    <link rel="stylesheet" href="style.css?v=20260619-20">
+  </head>
+  <body>
+    <main class="shell">
+      <section class="game-wrap" aria-label="Boco's World game">
+        <div class="hud" aria-live="polite">
+          <span id="lives">Lives:  03</span>
+          <span id="status">Press Start</span>
+          <span id="score">Score 0000</span>
+        </div>
+        <canvas id="game" width="640" height="512" aria-label="Boco's World playfield"></canvas>
+      </section>
+
+      <nav class="controller" aria-label="Game controls">
+        <button class="ctl ctl-up" data-key="up" aria-label="Jump">W</button>
+        <button class="ctl ctl-left" data-key="left" aria-label="Move left">A</button>
+        <button class="ctl ctl-down" data-key="down" aria-label="Duck">S</button>
+        <button class="ctl ctl-right" data-key="right" aria-label="Move right">D</button>
+        <button class="ctl ctl-start" data-key="start" aria-label="Start or restart">Start</button>
+      </nav>
+    </main>
+
+    <script src="game.js?v=20260619-20"></script>
+  </body>
+</html>
