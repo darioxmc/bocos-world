@@ -20,6 +20,14 @@ function saveHighScore(value) {
   }
 }
 
+function isMobileOperatingSystem() {
+  const ua = navigator.userAgent || navigator.vendor || "";
+  const iPadOS = navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1;
+  return /android/i.test(ua) || /iPad|iPhone|iPod/.test(ua) || iPadOS;
+}
+
+document.body.classList.toggle("is-mobile-os", isMobileOperatingSystem());
+
 const COLS = 20;
 const ROWS = 16;
 const CELL_W = canvas.width / COLS;
@@ -33,11 +41,13 @@ const MAX_SPEED = 4.2;
 const START_LIVES = 3;
 const MAX_LIVES = 99;
 const FIRST_SPAWN_DELAY = 1.25;
-const BIRD_ROW = 2.6;
+const BIRD_ROW = 1.1;
 const FLOWER_CHANCE = 0.18;
 const FLOWER_ROCK_BUFFER = 5.5;
 const OBSTACLE_SPACING = SPRITE_CELLS * 2;
-const BUILD_VERSION = "20260620-01";
+const BUILD_VERSION = "20260620-09";
+const CLOUD_W = 10;
+const CLOUD_WRAP = COLS + CLOUD_W + 6;
 const assetRoot = "assets/";
 const SOURCE_GRID_X = [67, 106, 145, 185, 224, 263, 302, 341, 380, 419, 458, 497, 536];
 const SOURCE_GRID_Y = [40, 74, 109, 144, 179, 214, 249, 284, 318, 353, 388, 423, 458];
@@ -102,7 +112,7 @@ const keys = {
   ArrowRight: "right",
   KeyW: "up",
   ArrowUp: "up",
-  Space: "up",
+  Space: "start",
   KeyS: "down",
   ArrowDown: "down",
   Enter: "start"
@@ -126,7 +136,9 @@ const game = {
     state: "run1",
     hurtTimer: 0,
     runFrame: 0,
-    duckTimer: 0
+    duckTimer: 0,
+    flyTimer: 0,
+    wasUp: false
   },
   obstacles: [],
   flowers: []
@@ -213,7 +225,63 @@ const colorMap = {
   R: "#d94b3e"
 };
 
+let audioContext = null;
+let audioCursor = 0;
+
+function ensureAudio() {
+  const AudioCtor = window.AudioContext || window.webkitAudioContext;
+  if (!AudioCtor) return null;
+  if (!audioContext) audioContext = new AudioCtor();
+  if (audioContext.state === "suspended") audioContext.resume();
+  return audioContext;
+}
+
+function pcSpeakerFrequency(divisor) {
+  return 1193180 / divisor;
+}
+
+function playTone(divisor, duration = 0.075, startAt = 0) {
+  const context = ensureAudio();
+  if (!context) return 0;
+
+  const start = Math.max(context.currentTime, audioCursor) + startAt;
+  const oscillator = context.createOscillator();
+  const gain = context.createGain();
+  oscillator.type = "square";
+  oscillator.frequency.value = pcSpeakerFrequency(divisor);
+  gain.gain.setValueAtTime(0, start);
+  gain.gain.linearRampToValueAtTime(0.055, start + 0.006);
+  gain.gain.setValueAtTime(0.055, start + duration - 0.012);
+  gain.gain.linearRampToValueAtTime(0, start + duration);
+  oscillator.connect(gain);
+  gain.connect(context.destination);
+  oscillator.start(start);
+  oscillator.stop(start + duration + 0.01);
+  audioCursor = start + duration + 0.025;
+  return duration + 0.025;
+}
+
+function playSequence(divisors, duration = 0.075) {
+  ensureAudio();
+  audioCursor = Math.max(audioCursor, audioContext?.currentTime || 0);
+  for (const divisor of divisors) playTone(divisor, duration);
+}
+
+function playSound(name) {
+  const sounds = {
+    start: [900, 1200, 1000, 800, 1100, 750],
+    jump: [396, 3136],
+    glide: [3136],
+    hit: [2800],
+    flower: [2000, 1568, 1200, 900],
+    gameover: [2400, 2800, 3200, 4000]
+  };
+  const sequence = sounds[name];
+  if (sequence) playSequence(sequence);
+}
+
 function startGame() {
+  playSound("start");
   Object.assign(game, {
     mode: "playing",
     elapsed: 0,
@@ -233,7 +301,9 @@ function startGame() {
     state: "run1",
     hurtTimer: 0,
     runFrame: 0,
-    duckTimer: 0
+    duckTimer: 0,
+    flyTimer: 0,
+    wasUp: false
   });
   game.lastTime = performance.now();
   updateHud();
@@ -321,6 +391,7 @@ function gameOver() {
   game.mode = "gameover";
   game.highScore = Math.max(game.highScore, game.score);
   saveHighScore(game.highScore);
+  playSound("gameover");
 }
 
 function spawnPattern() {
@@ -396,21 +467,29 @@ function updatePlayer(dt) {
   const move = (input.right ? 1 : 0) - (input.left ? 1 : 0);
   player.colOffset += move * 22 * dt;
   player.colOffset = Math.max(-11, Math.min(11, player.colOffset));
+  const upPressed = input.up && !player.wasUp;
 
-  if (input.up && player.y === 0) {
+  if (upPressed && player.y === 0) {
     player.vy = 24;
+    playSound("jump");
+  } else if (upPressed && player.y > 0 && player.flyTimer <= 0) {
+    player.flyTimer = 0.72;
+    player.vy = Math.max(player.vy, -2);
+    playSound("glide");
   }
 
   player.y += player.vy * dt;
-  player.vy -= 55 * dt;
+  player.vy -= player.flyTimer > 0 ? 14 * dt : 55 * dt;
   if (player.y < 0) {
     player.y = 0;
     player.vy = 0;
+    player.flyTimer = 0;
   }
 
   if (player.hurtTimer > 0) {
     player.hurtTimer -= dt;
     player.state = "hurt";
+    player.wasUp = input.up;
     return;
   }
 
@@ -418,17 +497,21 @@ function updatePlayer(dt) {
     player.duckTimer = 0.12;
   }
 
-  if (player.duckTimer > 0) {
+  if (player.flyTimer > 0) {
+    player.flyTimer -= dt;
+    player.state = "glide";
+  } else if (player.duckTimer > 0) {
     player.duckTimer -= dt;
     player.state = "duck";
   } else if (player.y > 3 && player.vy < -6) {
-    player.state = "glide";
+    player.state = "jump";
   } else if (player.y > 0) {
     player.state = "jump";
   } else {
     player.runFrame += dt * 8;
     player.state = Math.floor(player.runFrame) % 2 === 0 ? "run1" : "run2";
   }
+  player.wasUp = input.up;
 }
 
 function updateWorld(dt) {
@@ -447,20 +530,40 @@ function updateWorld(dt) {
 }
 
 function updateCollisions() {
+  if (game.player.flyTimer > 0 || game.player.state === "glide") {
+    for (const item of game.obstacles) {
+      if (item.type === "bird" && playerTouches(item.type, item)) {
+        item.x = -20;
+        game.lives -= 1;
+        game.player.hurtTimer = 0.55;
+        playSound("hit");
+        if (game.lives <= 0) gameOver();
+        break;
+      }
+    }
+    updateFlowerCollisions();
+    return;
+  }
+
   for (const item of game.obstacles) {
     if (playerTouches(item.type, item)) {
       item.x = -20;
       game.lives -= 1;
       game.player.hurtTimer = 0.55;
+      playSound("hit");
       if (game.lives <= 0) gameOver();
       break;
     }
   }
+  updateFlowerCollisions();
+}
 
+function updateFlowerCollisions() {
   for (const item of game.flowers) {
     if (!item.collected && playerTouches("flower", item)) {
       item.collected = true;
       game.lives = Math.min(MAX_LIVES, game.lives + 1);
+      playSound("flower");
     }
   }
 }
@@ -542,10 +645,10 @@ function drawBackground(palette) {
   ctx.fillRect(0, 0, canvas.width, canvas.height);
 
   const cloudSets = [
-    [2, 1.2], [9, 3.5], [17, 1.6], [26, 2.8]
+    [2, 1], [9, 4], [17, 2], [26, 3]
   ];
   for (const [col, row] of cloudSets) {
-    const wrapped = ((col - game.cloudOffset) % 24 + 24) % 24 - 3;
+    const wrapped = ((col - game.cloudOffset + CLOUD_W) % CLOUD_WRAP + CLOUD_WRAP) % CLOUD_WRAP - CLOUD_W;
     drawCloud(wrapped, row, palette);
   }
 
@@ -624,7 +727,7 @@ function drawObjectShape(item) {
   if (!shape) return;
   for (const [col, row, color] of shape.cells) {
     ctx.fillStyle = color;
-    fillCell(item.x + col, item.y + row, 1, 1);
+    fillCell(Math.round(item.x) + col, Math.round(item.y) + row, 1, 1);
   }
 }
 
@@ -633,7 +736,7 @@ function drawPlayer() {
   if (sprite) {
     const x = (PLAYER_X + game.player.colOffset) * CELL_W;
     const y = (GROUND_ROW - SPRITE_CELLS - game.player.y) * CELL_H;
-    ctx.drawImage(game.player.state === "hurt" ? sprite.hurtImage : sprite.image, Math.round(x), Math.round(y));
+    ctx.drawImage(game.player.state === "hurt" ? sprite.hurtImage : sprite.image, snapToCell(x), snapToCell(y));
     return;
   }
 
@@ -679,6 +782,10 @@ function fillCell(col, row, w = 1, h = 1) {
   ctx.fillRect(Math.round(col * CELL_W), Math.round(row * CELL_H), Math.ceil(w * CELL_W), Math.ceil(h * CELL_H));
 }
 
+function snapToCell(value) {
+  return Math.round(value / ART_GRID) * ART_GRID;
+}
+
 function updateHud() {
   livesEl.textContent = `Lives:  ${String(game.lives).padStart(2, "0")}`;
   scoreEl.textContent = `Score ${String(game.score).padStart(4, "0")}`;
@@ -706,8 +813,14 @@ function setInput(code, isDown) {
   input[key] = isDown;
 }
 
+function setInputKeys(keyList, isDown) {
+  for (const key of keyList) {
+    if (Object.prototype.hasOwnProperty.call(input, key)) input[key] = isDown;
+  }
+}
+
 window.addEventListener("keydown", (event) => {
-  if (game.mode !== "playing" && (event.code === "KeyS" || event.code === "KeyR" || event.code === "Enter")) {
+  if (game.mode !== "playing" && (event.code === "KeyS" || event.code === "KeyR" || event.code === "Enter" || event.code === "Space")) {
     event.preventDefault();
     beginGame();
     return;
@@ -730,14 +843,36 @@ for (const button of document.querySelectorAll("[data-key]")) {
   const key = button.dataset.key;
   const down = (event) => {
     event.preventDefault();
+    button.setPointerCapture?.(event.pointerId);
     button.classList.add("is-down");
     input[key] = true;
     if (key === "start" && game.mode !== "playing") beginGame();
   };
   const up = (event) => {
     event.preventDefault();
+    button.releasePointerCapture?.(event.pointerId);
     button.classList.remove("is-down");
     input[key] = false;
+  };
+  button.addEventListener("pointerdown", down);
+  button.addEventListener("pointerup", up);
+  button.addEventListener("pointercancel", up);
+  button.addEventListener("pointerleave", up);
+}
+
+for (const button of document.querySelectorAll("[data-keys]")) {
+  const keyList = button.dataset.keys.split(/\s+/).filter(Boolean);
+  const down = (event) => {
+    event.preventDefault();
+    button.setPointerCapture?.(event.pointerId);
+    button.classList.add("is-down");
+    setInputKeys(keyList, true);
+  };
+  const up = (event) => {
+    event.preventDefault();
+    button.releasePointerCapture?.(event.pointerId);
+    button.classList.remove("is-down");
+    setInputKeys(keyList, false);
   };
   button.addEventListener("pointerdown", down);
   button.addEventListener("pointerup", up);

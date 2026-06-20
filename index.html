@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <title>Boco's World</title>
-    <link rel="stylesheet" href="style.css?v=20260620-01">
+    <link rel="stylesheet" href="style.css?v=20260620-08">
   </head>
   <body>
     <main class="shell">
@@ -17,15 +17,30 @@
         <canvas id="game" width="640" height="512" aria-label="Boco's World playfield"></canvas>
       </section>
 
-      <nav class="controller" aria-label="Game controls">
-        <button class="ctl ctl-up" data-key="up" aria-label="Jump">W</button>
-        <button class="ctl ctl-left" data-key="left" aria-label="Move left">A</button>
-        <button class="ctl ctl-down" data-key="down" aria-label="Duck">S</button>
-        <button class="ctl ctl-right" data-key="right" aria-label="Move right">D</button>
-        <button class="ctl ctl-start" data-key="start" aria-label="Start or restart">Start</button>
+      <nav class="controller keyboard-controller" aria-label="Keyboard controls">
+        <button class="ctl ctl-up" data-key="up" aria-label="Jump">W / &#8593;</button>
+        <button class="ctl ctl-left" data-key="left" aria-label="Move left">A / &#8592;</button>
+        <button class="ctl ctl-down" data-key="down" aria-label="Duck">S / &#8595;</button>
+        <button class="ctl ctl-right" data-key="right" aria-label="Move right">D / &#8594;</button>
+        <button class="ctl ctl-start" data-key="start" aria-label="Start or restart">Start (Spacebar/Enter)</button>
+      </nav>
+
+      <nav class="touch-controller" aria-label="Touch controls">
+        <div class="dpad" aria-label="Virtual directional pad">
+          <button class="ctl dpad-btn dpad-up-left" data-keys="up left" aria-label="Up left">&#8598;</button>
+          <button class="ctl dpad-btn dpad-up" data-keys="up" aria-label="Up">&#8593;</button>
+          <button class="ctl dpad-btn dpad-up-right" data-keys="up right" aria-label="Up right">&#8599;</button>
+          <button class="ctl dpad-btn dpad-left" data-keys="left" aria-label="Left">&#8592;</button>
+          <span class="dpad-center" aria-hidden="true"></span>
+          <button class="ctl dpad-btn dpad-right" data-keys="right" aria-label="Right">&#8594;</button>
+          <button class="ctl dpad-btn dpad-down-left" data-keys="down left" aria-label="Down left">&#8601;</button>
+          <button class="ctl dpad-btn dpad-down" data-keys="down" aria-label="Down">&#8595;</button>
+          <button class="ctl dpad-btn dpad-down-right" data-keys="down right" aria-label="Down right">&#8600;</button>
+        </div>
+        <button class="ctl touch-start" data-key="start" aria-label="Start or restart">Start</button>
       </nav>
     </main>
 
-    <script src="game.js?v=20260620-01"></script>
+    <script src="game.js?v=20260620-09"></script>
   </body>
 </html>
