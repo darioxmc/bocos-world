@@ -37,10 +37,44 @@ const BIRD_ROW = 2.6;
 const FLOWER_CHANCE = 0.18;
 const FLOWER_ROCK_BUFFER = 5.5;
 const OBSTACLE_SPACING = SPRITE_CELLS * 2;
-const BUILD_VERSION = "20260619-20";
+const BUILD_VERSION = "20260620-01";
 const assetRoot = "assets/";
 const SOURCE_GRID_X = [67, 106, 145, 185, 224, 263, 302, 341, 380, 419, 458, 497, 536];
 const SOURCE_GRID_Y = [40, 74, 109, 144, 179, 214, 249, 284, 318, 353, 388, 423, 458];
+
+const objectShapes = {
+  bird: {
+    w: 3,
+    h: 2,
+    cells: [
+      [0, 0, "#111111"],
+      [2, 0, "#111111"],
+      [1, 1, "#111111"]
+    ]
+  },
+  rock: {
+    w: 3,
+    h: 2,
+    cells: [
+      [1, 0, "#777b73"],
+      [0, 1, "#777b73"],
+      [1, 1, "#777b73"],
+      [2, 1, "#777b73"]
+    ]
+  },
+  flower: {
+    w: 3,
+    h: 4,
+    cells: [
+      [1, 0, "#e83d36"],
+      [0, 1, "#e83d36"],
+      [1, 1, "#ffe668"],
+      [2, 1, "#e83d36"],
+      [1, 2, "#e83d36"],
+      [1, 3, "#26d229"]
+    ]
+  }
+};
 
 const bgImage = new Image();
 bgImage.src = `${assetRoot}boco_bg.gif`;
@@ -308,15 +342,15 @@ function spawnPattern() {
 }
 
 function rock(x) {
-  return { type: "rock", x, y: GROUND_ROW - 2, w: 1.65, h: 2, scored: false };
+  return { type: "rock", x, y: GROUND_ROW - objectShapes.rock.h, w: objectShapes.rock.w, h: objectShapes.rock.h, scored: false };
 }
 
 function bird(x) {
-  return { type: "bird", x, y: BIRD_ROW, w: 3.6, h: 1.3, scored: false };
+  return { type: "bird", x, y: BIRD_ROW, w: objectShapes.bird.w, h: objectShapes.bird.h, scored: false };
 }
 
 function flower(x) {
-  return { type: "flower", x, y: GROUND_ROW - 4, w: 1.6, h: 4, collected: false };
+  return { type: "flower", x, y: GROUND_ROW - objectShapes.flower.h, w: objectShapes.flower.w, h: objectShapes.flower.h, collected: false };
 }
 
 function spawnFlowerForWave(baseX, wave) {
@@ -478,8 +512,15 @@ function playerProbePoints(kind) {
 }
 
 function pointInsideItem(point, item) {
-  const pad = item.type === "bird" ? 0.12 : 0.05;
-  return point.x >= item.x - pad && point.x <= item.x + item.w + pad && point.y >= item.y - pad && point.y <= item.y + item.h + pad;
+  const shape = objectShapes[item.type];
+  if (!shape) return false;
+  const pad = item.type === "bird" ? 0.12 : 0.08;
+  return shape.cells.some(([col, row]) => (
+    point.x >= item.x + col - pad &&
+    point.x <= item.x + col + 1 + pad &&
+    point.y >= item.y + row - pad &&
+    point.y <= item.y + row + 1 + pad
+  ));
 }
 
 function draw() {
@@ -539,13 +580,23 @@ function drawGrid() {
 }
 
 function drawCloud(col, row, palette) {
+  const shade = [
+    [1, 0], [2, 0], [5, 0], [6, 0], [7, 0],
+    [0, 1], [1, 1], [3, 1], [4, 1], [8, 1],
+    [0, 2], [9, 2], [0, 3], [9, 3],
+    [1, 4], [5, 4], [6, 4], [8, 4],
+    [2, 5], [3, 5], [4, 5], [7, 5]
+  ];
+  const white = [
+    [2, 1], [5, 1], [6, 1], [7, 1],
+    [1, 2], [2, 2], [3, 2], [4, 2], [5, 2], [6, 2], [7, 2], [8, 2],
+    [1, 3], [2, 3], [3, 3], [4, 3], [5, 3], [6, 3], [7, 3], [8, 3],
+    [2, 4], [3, 4], [4, 4], [7, 4]
+  ];
   ctx.fillStyle = palette.cloudShade;
-  fillCell(col + 1, row, 8, 1);
-  fillCell(col, row + 1, 10, 3);
-  fillCell(col + 2, row + 4, 6, 1);
+  for (const [x, y] of shade) fillCell(col + x, row + y, 1, 1);
   ctx.fillStyle = palette.cloud;
-  fillCell(col + 2, row + 1, 6, 3);
-  fillCell(col + 4, row, 3, 5);
+  for (const [x, y] of white) fillCell(col + x, row + y, 1, 1);
 }
 
 function drawWorld() {
@@ -557,35 +608,24 @@ function drawWorld() {
 }
 
 function drawRock(item) {
-  ctx.fillStyle = "#6c6f68";
-  fillCell(item.x, item.y + 0.4, 1.65, 1.6);
-  ctx.fillStyle = "#8f9188";
-  fillCell(item.x + 0.25, item.y + 0.7, 0.55, 0.35);
-  ctx.fillStyle = "#4f524c";
-  fillCell(item.x, item.y + 1.75, 1.65, 0.25);
+  drawObjectShape(item);
 }
 
 function drawBird(item) {
-  ctx.fillStyle = "#111111";
-  fillCell(item.x, item.y + 0.45, 1.1, 0.35);
-  fillCell(item.x + 2.4, item.y + 0.45, 1.2, 0.35);
-  fillCell(item.x + 1.1, item.y + 0.25, 1.3, 0.7);
-  fillCell(item.x + 1.45, item.y + 0.95, 0.55, 0.35);
-  ctx.fillStyle = "#2a2a2a";
-  fillCell(item.x + 0.4, item.y + 0.2, 0.7, 0.25);
-  fillCell(item.x + 2.5, item.y + 0.2, 0.7, 0.25);
+  drawObjectShape(item);
 }
 
 function drawFlower(item) {
-  ctx.fillStyle = "#3f8d37";
-  fillCell(item.x + 0.7, item.y + 1.7, 0.35, 2.3);
-  ctx.fillStyle = "#f04c9a";
-  fillCell(item.x + 0.35, item.y + 0.55, 0.35, 0.7);
-  fillCell(item.x + 0.7, item.y + 0.2, 0.35, 0.7);
-  fillCell(item.x + 1.05, item.y + 0.55, 0.35, 0.7);
-  fillCell(item.x + 0.7, item.y + 0.9, 0.35, 0.35);
-  ctx.fillStyle = "#ffe668";
-  fillCell(item.x + 0.7, item.y + 0.55, 0.35, 0.35);
+  drawObjectShape(item);
+}
+
+function drawObjectShape(item) {
+  const shape = objectShapes[item.type];
+  if (!shape) return;
+  for (const [col, row, color] of shape.cells) {
+    ctx.fillStyle = color;
+    fillCell(item.x + col, item.y + row, 1, 1);
+  }
 }
 
 function drawPlayer() {
