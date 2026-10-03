@@ -553,10 +553,69 @@ function bossBird(ctx) {
   rect(ctx, '#edd2a3', 42, 60, 6, 1);
 }
 
+const BOSS_ANIMATION_FRAMES = { idle: 4, warn: 4, attack: 6, recover: 4, return: 4 };
+
+function bossAnimationFrame(ctx, source, type, phase, frame) {
+  ctx.imageSmoothingEnabled = false;
+  if (phase === 'idle' || phase === 'return') {
+    const bob = type === 'moth' || type === 'bird' ? [0, -1, -2, -1][frame] : [0, 0, -1, 0][frame];
+    ctx.drawImage(source, 0, bob);
+    return;
+  }
+  if (phase === 'warn') {
+    const squeeze = [0, 2, 3, 1][frame];
+    ctx.drawImage(source, 0, 0, 64, 64, squeeze, squeeze, 64 - squeeze * 2, 64 - squeeze);
+    return;
+  }
+  if (phase === 'recover') {
+    const droop = [1, 3, 4, 2][frame];
+    ctx.drawImage(source, 0, 0, 64, 32, 0, droop, 64, 32);
+    ctx.drawImage(source, 0, 32, 64, 32, 0, 32, 64, 32);
+    return;
+  }
+  if ((type === 'moth' || type === 'bird') && phase === 'attack') {
+    const wing = [1, -2, -4, -1, 2, 0][frame];
+    ctx.drawImage(source, 0, 0, 24, 64, 0, wing, 24, 64);
+    ctx.drawImage(source, 24, 0, 16, 64, 24, 0, 16, 64);
+    ctx.drawImage(source, 40, 0, 24, 64, 40, wing, 24, 64);
+    return;
+  }
+  if (type === 'plant' && phase === 'attack') {
+    const snap = [0, 2, 4, 2, 0, -1][frame];
+    ctx.drawImage(source, 0, 0, 64, 43, 0, snap, 64, 43 - Math.max(0, snap));
+    ctx.drawImage(source, 0, 43, 64, 21, 0, 43, 64, 21);
+    return;
+  }
+  // The beetle charge leans forward in whole-pixel bands. The sprite flip in
+  // gameplay mirrors this cleanly without changing its collision rectangle.
+  const lean = [0, 1, 3, 5, 3, 1][frame];
+  for (let y = 0; y < 64; y += 8) {
+    const shift = Math.round(lean * (1 - y / 64));
+    ctx.drawImage(source, 0, y, 64 - shift, 8, shift, y, 64 - shift, 8);
+  }
+}
+
 function objects(scene) {
   texture(scene, 'seed', 8, 8, ctx => {
     matrix(ctx, ['..oo....', '.oLSo...', 'oLLYSo..', 'oLYYSoo.', '.oYSSSo.', '..oSSSo.', '...ooo..', '........'],
       { o: '#473946', L: '#f8d58b', Y: '#be8a61', S: '#876050' });
+  });
+  texture(scene, 'spring-bloom', 16, 8, ctx => {
+    polygon(ctx, OUTLINE, [[1, 5], [4, 2], [7, 3], [10, 1], [15, 4], [14, 7], [2, 7]]);
+    polygon(ctx, '#e56f82', [[2, 5], [5, 3], [8, 4], [10, 2], [14, 4], [13, 6], [3, 6]]);
+    rect(ctx, '#ffd276', 5, 4, 7, 2);
+    rect(ctx, '#fff0a8', 7, 4, 3, 1);
+  });
+  texture(scene, 'chapter-marker', 24, 48, ctx => {
+    rect(ctx, OUTLINE, 2, 7, 3, 41); rect(ctx, '#8b694d', 3, 9, 1, 39);
+    rect(ctx, OUTLINE, 19, 7, 3, 41); rect(ctx, '#8b694d', 20, 9, 1, 39);
+    polygon(ctx, OUTLINE, [[0, 5], [5, 1], [19, 1], [24, 5], [21, 13], [3, 13]]);
+    polygon(ctx, '#e8c85f', [[2, 5], [6, 3], [18, 3], [22, 5], [20, 11], [4, 11]]);
+    rect(ctx, '#fff0a8', 6, 4, 10, 2); rect(ctx, '#a84b54', 10, 7, 4, 3);
+  });
+  texture(scene, 'boss-warning', 8, 16, ctx => {
+    rect(ctx, '#3b3038', 2, 0, 5, 11); rect(ctx, '#ffe777', 3, 1, 3, 8);
+    rect(ctx, '#3b3038', 2, 12, 5, 4); rect(ctx, '#fff1a8', 3, 13, 3, 2);
   });
   texture(scene, 'flower', 16, 32, ctx => {
     rect(ctx, '#305952', 7, 14, 2, 17);
@@ -680,6 +739,16 @@ export function createArt(scene) {
   }
   for (const [key, paint] of Object.entries({ beetle: bossBeetle, moth: bossMoth, plant: bossPlant, bird: bossBird })) {
     texture(scene, `boss-${key}`, 64, 64, paint);
+    const source = scene.textures.get(`boss-${key}`).getSourceImage();
+    for (const [phase, count] of Object.entries(BOSS_ANIMATION_FRAMES)) {
+      for (let frame = 0; frame < count; frame++) {
+        const animationKey = `boss-${key}-${phase}${frame}`;
+        texture(scene, animationKey, 64, 64, ctx => bossAnimationFrame(ctx, source, key, phase, frame));
+        // Bosses are vulnerable only during recovery, so only those frames
+        // need a second damage palette in memory.
+        if (phase === 'recover') hitTexture(scene, animationKey);
+      }
+    }
   }
   for (const key of scene.textures.getTextureKeys()) {
     if (/^(beetle|shellback|hopper|plant|bird|moth)(-(run|flap)\d)?$|^boss-(beetle|moth|plant|bird)$/.test(key)) hitTexture(scene, key);
@@ -810,6 +879,43 @@ function cloudLayer(ctx, key) {
     wrapped(ctx, x, 76 * size, (c, xx) => cloud(c, xx, y, size, p.cloud));
   }
   wrapped(ctx, -90, 152, (c, xx) => cloud(c, xx, 139, 2, [p.sky[4], p.sky[3], p.sky[5]]));
+}
+
+function chapterAtmosphere(ctx, key, variant) {
+  const phase = Math.max(0, Math.min(6, variant));
+  if (key === 'meadow') {
+    const colors = ['#f8e895', '#fff4c9', '#df8b85'];
+    for (let i = 0; i < 8 + phase * 3; i++) {
+      const x = (i * 67 + phase * 29) % BG_WIDTH;
+      const y = 42 + (i * 31 + phase * 17) % 170;
+      rect(ctx, colors[(i + phase) % colors.length], x, y, 3, 1);
+      rect(ctx, colors[(i + phase + 1) % colors.length], x + 1, y + 1, 1, 2);
+    }
+    if (phase >= 1) for (const x of [116, 354]) {
+      rect(ctx, '#6d8d79', x, 109, 2, 68); rect(ctx, '#d9d7a4', x - 13, 117, 28, 2);
+      rect(ctx, '#d9d7a4', x, 104, 2, 28);
+    }
+  } else if (key === 'cliff') {
+    for (let i = 0; i < 7 + phase * 2; i++) {
+      const x = (i * 83 + phase * 23) % BG_WIDTH;
+      const y = 35 + (i * 29) % 190;
+      rect(ctx, i % 2 ? '#d8e8df' : '#abc8cd', x, y, 18 + (i % 3) * 8, 1);
+      if (phase >= 2 && i % 3 === 0) polygon(ctx, '#e7c967', [[x + 5, y + 8], [x + 9, y + 12], [x + 5, y + 16], [x + 1, y + 12]]);
+    }
+  } else if (key === 'canopy') {
+    for (let i = 0; i < 10 + phase * 4; i++) {
+      const x = (i * 47 + phase * 41) % BG_WIDTH;
+      const y = 30 + (i * 53 + phase * 11) % 230;
+      rect(ctx, i % 3 ? '#b8cf85' : '#f3d887', x, y, 2, 2);
+      if (phase >= 3 && i % 4 === 0) rect(ctx, '#6f9675', x, 0, 1, y - 4);
+    }
+  } else {
+    for (let i = 0; i < 14 + phase * 3; i++) {
+      const x = (i * 41 + phase * 19) % BG_WIDTH;
+      const y = 18 + (i * 37) % 190;
+      rect(ctx, i % 4 ? '#f7e1b1' : '#f0b7b4', x, y, i % 3 === 0 ? 2 : 1, 1);
+    }
+  }
 }
 
 function rollingRidge(ctx, y, shape, colors) {
@@ -1116,9 +1222,13 @@ const LANDSCAPES = {
 /** Owns backdrop display objects, not the camera or gameplay state. */
 export function createBackdrop(scene, areaKey, worldWidth, worldHeight) {
   const key = Object.hasOwn(THEMES, areaKey) ? areaKey : 'meadow';
-  const painters = [ctx => sky(ctx, key), ctx => cloudLayer(ctx, key), ...LANDSCAPES[key]];
-  const factors = [0, 0.12, 0.22, 0.42, 0.65];
-  const vertical = [0, 0.12, 0.18, 0.29, 0.4];
+  for (let variant = 0; variant <= 6; variant++) {
+    texture(scene, `skybound-bg-${key}-atmosphere-${variant}`, BG_WIDTH, BG_HEIGHT,
+      ctx => chapterAtmosphere(ctx, key, variant));
+  }
+  const painters = [ctx => sky(ctx, key), ctx => cloudLayer(ctx, key), ctx => chapterAtmosphere(ctx, key, 0), ...LANDSCAPES[key]];
+  const factors = [0, 0.12, 0.18, 0.22, 0.42, 0.65];
+  const vertical = [0, 0.12, 0.15, 0.18, 0.29, 0.4];
   const nearOffset = { meadow: 80, cliff: 96, canopy: 112, roost: 144 }[key];
   const layers = painters.map((paint, i) => {
     const name = `skybound-bg-${key}-${i}`;
@@ -1130,6 +1240,7 @@ export function createBackdrop(scene, areaKey, worldWidth, worldHeight) {
   let alive = true;
   let viewWidth = 320;
   let viewHeight = 240;
+  let chapterVariant = 0;
   const height = Number.isFinite(worldHeight) ? Math.max(240, worldHeight) : 240;
 
   function update(camera, time = 0) {
@@ -1147,12 +1258,13 @@ export function createBackdrop(scene, areaKey, worldWidth, worldHeight) {
     const travelY = Math.max(0, height - h);
     const progressY = travelY ? Math.max(0, Math.min(1, scrollY / travelY)) : 0;
     for (let i = 0; i < layers.length; i++) {
-      const drift = i === 1 && key !== 'canopy' && Number.isFinite(time) ? time * 0.0015 : 0;
+      const drift = i === 1 && key !== 'canopy' && Number.isFinite(time) ? time * (0.0013 + chapterVariant * 0.00012) :
+        i === 2 && Number.isFinite(time) ? time * (0.00035 + chapterVariant * 0.00008) : 0;
       // Modulo is horizontal only: a vertical wrap would cut the skyline in two.
       const offset = Math.floor(scrollX * factors[i] + drift);
       layers[i].tilePositionX = ((offset % BG_WIDTH) + BG_WIDTH) % BG_WIDTH;
       const maxY = Math.max(0, BG_HEIGHT - h);
-      const baseY = i === 4 ? Math.min(nearOffset, maxY) : 0;
+      const baseY = i === 5 ? Math.min(nearOffset, maxY) : 0;
       layers[i].tilePositionY = Math.floor(baseY + progressY * (maxY - baseY) * vertical[i]);
     }
   }
@@ -1163,6 +1275,12 @@ export function createBackdrop(scene, areaKey, worldWidth, worldHeight) {
   update(scene.cameras?.main, 0);
   return {
     update,
+    get chapter() { return chapterVariant; },
+    setChapter(variant = 0) {
+      chapterVariant = Math.max(0, Math.min(6, Number(variant) || 0));
+      layers[2].setTexture(`skybound-bg-${key}-atmosphere-${chapterVariant}`);
+      layers[2].setAlpha(chapterVariant === 0 ? 0.62 : Math.min(0.9, 0.65 + chapterVariant * 0.04));
+    },
     destroy() {
       if (!alive) return;
       alive = false;

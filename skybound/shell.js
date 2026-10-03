@@ -53,6 +53,7 @@ export class Shell {
     this.overlay = document.getElementById('overlay');
     this.hud = document.getElementById('hud');
     this.toast = document.getElementById('toast');
+    this.chapterCard = document.getElementById('chapter-card');
     this.activeSlot = null;
     this.view = '';
     this.capture = null;
@@ -526,5 +527,20 @@ export class Shell {
     this.toast.hidden = false;
     this.toastTimer = setTimeout(() => { this.toast.hidden = true; }, 3200);
   }
-  destroy() { this.listeners.splice(0).forEach(remove => remove()); clearTimeout(this.toastTimer); this.hide(); }
+  showChapter(chapter, area) {
+    if (!this.chapterCard) return;
+    document.getElementById('chapter-area').textContent = area || '';
+    document.getElementById('chapter-number').textContent = `ACT ${chapter.act} / ${chapter.count}`;
+    document.getElementById('chapter-name').textContent = chapter.name || '';
+    document.getElementById('chapter-style').textContent = chapter.style || '';
+    document.getElementById('chapter-tagline').textContent = chapter.tagline || '';
+    this.chapterCard.hidden = false;
+    this.hud.hidden = true;
+  }
+  hideChapter() {
+    if (!this.chapterCard) return;
+    this.chapterCard.hidden = true;
+    if (this.overlay.hidden) this.hud.hidden = false;
+  }
+  destroy() { this.listeners.splice(0).forEach(remove => remove()); clearTimeout(this.toastTimer); this.hideChapter(); this.hide(); }
 }

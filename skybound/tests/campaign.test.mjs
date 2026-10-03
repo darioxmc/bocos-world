@@ -11,6 +11,16 @@ test('main campaign has over twenty minutes of travel without bosses or optional
   assert.equal(LEVELS[3].width, 2048, 'optional finale remains separate');
 });
 
+test('inserted chapters have distinct identities and route mechanics', () => {
+  const acts = LEVELS.slice(0, 3).flatMap(level => level.chapters.filter(chapter => chapter.kind === 'act'));
+  assert.equal(acts.length, 18);
+  assert.deepEqual([...new Set(acts.map(chapter => chapter.mechanic))].sort(), ['duel', 'gust', 'lift', 'relay', 'spring', 'trail']);
+  for (const chapter of acts) {
+    assert(chapter.style && chapter.tagline && chapter.act >= 1 && chapter.act <= chapter.count);
+  }
+  for (const level of LEVELS.slice(0, 3)) assert(level.springs.length > 0, `${level.id}: no spring routes`);
+});
+
 test('required terrain has modest rises and gaps, and each area connects to its boss', () => {
   for (const level of LEVELS) {
     for (let i = 1; i < level.terrain.length; i++) {

@@ -27,6 +27,7 @@ class Play extends Phaser.Scene {
     this.areaIndex = this.save ? Math.min(3, Math.max(0, data.area ?? this.save.area)) : 0;
     this.level = LEVELS[this.areaIndex];
     this.currentChapter = null;
+    this.chapterIntroRemaining = 0;
     this.clock = 0;
     this.pendingPlaytime = 0;
     this.mode = this.save ? 'playing' : 'title';
@@ -46,6 +47,7 @@ class Play extends Phaser.Scene {
     this.maxHealth = this.save?.assists.extraHealth ? 5 : 3;
     this.health = this.maxHealth;
     this.attackVictims = new Set();
+    this.springReady = 0;
     this.bossEngaged = false;
     this.bossDefeated = false;
     this.bossState = null;
@@ -73,6 +75,7 @@ class Play extends Phaser.Scene {
       if (!platform.getData('oneWay')) return true;
       return canLand(this.previousFeet, this.player.body.velocity.y, platform.body.top, this.dropUntil, this.clock);
     });
+    this.physics.add.overlap(this.player, this.springs, (_player, spring) => this.springContact(spring));
     this.enemies = this.physics.add.group();
     this.seeds = this.physics.add.group({ allowGravity: false });
     this.enemyData = new Map();
@@ -96,7 +99,9 @@ class Play extends Phaser.Scene {
     if (this.save) {
       shell.hide();
       audio.resume();
-      audio.startMusic(this.level.id);
+      this.currentChapter = chapterAt(this.level, this.player.x);
+      this.backdrop.setChapter(this.currentChapter?.variant || 0);
+      audio.startMusic(this.level.id, this.currentChapter?.variant || 0);
       shell.showToast(this.level.name);
       if (!SaveStore.storageAvailable) shell.showToast('Saving unavailable - export a backup');
     } else {
@@ -120,6 +125,18 @@ class Play extends Phaser.Scene {
       sprite.body.setAllowGravity(false).setImmovable(true);
       sprite.setData('oneWay', Boolean(rect.oneWay));
       sprite.setData('motion', rect.move ? { ...rect.move, origin: rect[rect.move.axis], dir: 1 } : null);
+    }
+    this.springs = this.physics.add.staticGroup();
+    for (const point of this.level.springs || []) {
+      const spring = this.springs.create(point.x, point.y, 'spring-bloom').setOrigin(0.5, 1).setDepth(4);
+      spring.body.setSize(14, 6).setOffset(1, 2);
+      spring.refreshBody();
+    }
+    this.chapterMarkers = [];
+    for (const chapter of this.level.chapters?.filter(item => item.kind === 'act') || []) {
+      const x = chapter.endX - 20;
+      const surface = this.level.terrain.find(rect => x >= rect.x && x < rect.x + rect.w)?.y;
+      if (surface !== undefined) this.chapterMarkers.push(this.add.image(x, surface, 'chapter-marker').setOrigin(0.5, 1).setDepth(4));
     }
     this.gustVisuals = this.level.gusts.map((gust) => {
       const strips = [];
@@ -162,7 +179,8 @@ class Play extends Phaser.Scene {
     this.boss = this.physics.add.sprite(spec.x, spec.y, `boss-${spec.type}`).setOrigin(0.5, 1).setDepth(7);
     const width = spec.type === 'moth' ? 20 : spec.type === 'bird' ? 38 : 46;
     this.boss.body.setSize(width, 44).setOffset((64 - width) / 2, 20).setAllowGravity(false).setImmovable(true);
-    this.bossState = { hp: 6, max: 6, phase: 'sleep', until: 0, facing: -1, hitUntil: 0, targetX: 0, targetY: 0, volley: 0 };
+    this.bossState = { hp: 6, max: 6, phase: 'sleep', until: 0, started: 0, facing: -1, hitUntil: 0, targetX: 0, targetY: 0, volley: 0 };
+    this.bossCue = this.add.image(spec.x, spec.y - 68, 'boss-warning').setOrigin(0.5, 1).setDepth(9).setVisible(false);
     this.physics.add.overlap(this.player, this.boss, () => this.bossContact());
     const arena = spec.arena;
     this.gate = this.add.tileSprite(arena.x + arena.w - 12, arena.y, 12, arena.h, `${this.level.id}-ground`).setOrigin(0).setDepth(4);
@@ -260,6 +278,12 @@ class Play extends Phaser.Scene {
       this.player.setTexture(`boco-run${Math.floor(this.clock * 9) % 6}`);
       return;
     }
+    if (this.mode === 'chapter') {
+      this.clock += dt;
+      this.chapterIntroRemaining -= dt;
+      if (this.chapterIntroRemaining <= 0) this.finishChapterIntro();
+      return;
+    }
     if (this.mode !== 'playing') return;
     if (controls.pressed('pause')) { this.pause(); return; }
     this.clock += dt;
@@ -350,6 +374,16 @@ class Play extends Phaser.Scene {
       audio.effect('peck');
     }
     this.player.setFlipX(this.facing < 0);
+  }
+
+  springContact(spring) {
+    if (this.mode !== 'playing' || this.clock < this.springReady || this.player.body.velocity.y < -40) return;
+    if (this.player.body.bottom > spring.body.top + 10) return;
+    this.player.setVelocityY(-365);
+    this.coyoteUntil = 0;
+    this.springReady = this.clock + 0.22;
+    this.gliding = false;
+    audio.effect('spring');
   }
 
   animatePlayer() {
@@ -524,12 +558,14 @@ class Play extends Phaser.Scene {
     this.seeds.clear(true, true);
     if (this.bossEngaged && !this.bossDefeated) {
       this.bossEngaged = false;
-      Object.assign(this.bossState, { hp: 6, phase: 'sleep', until: 0, hitUntil: 0, flashUntil: 0, volley: 0 });
+      Object.assign(this.bossState, { hp: 6, phase: 'sleep', until: 0, started: 0, hitUntil: 0, flashUntil: 0, volley: 0 });
       this.boss.body.reset(this.level.boss.x, this.level.boss.y);
       this.boss.setTexture(`boss-${this.level.boss.type}`).clearTint().setAlpha(1);
+      this.bossCue.setVisible(false);
       this.boss.setVelocity(0, 0);
       for (const ledge of this.bossPlatforms) { ledge.setVisible(false); ledge.body.enable = false; }
       this.cameras.main.setBounds(0, 0, this.level.width, this.level.height);
+      audio.setMusicChapter(this.currentChapter?.variant || 0);
     }
     this.refreshHud();
   }
@@ -550,12 +586,14 @@ class Play extends Phaser.Scene {
     const boss = this.boss;
     const state = this.bossState;
     if (!this.bossEngaged) {
+      this.bossCue.setVisible(false);
       if (this.player.x < arena.x + 20) return;
       this.bossEngaged = true;
-      state.phase = 'warn'; state.until = this.clock + 1.25;
+      state.phase = 'warn'; state.started = this.clock; state.until = this.clock + 1.45;
       state.targetX = this.player.x;
       state.targetY = this.player.y - 10;
       this.cameras.main.setBounds(arena.x, Math.max(0, arena.y - 20), arena.w, Math.max(240, arena.h));
+      audio.startMusic(this.level.id, 6, 'boss');
       audio.effect('boss');
       shell.showToast(spec.name);
     }
@@ -565,14 +603,17 @@ class Play extends Phaser.Scene {
     if (state.phase === 'warn') {
       boss.setVelocity(0, 0);
       boss.setTint(Math.floor(this.clock * 6) % 2 ? 0xffa574 : 0xffd778);
+      this.bossCue.setVisible(true).setPosition(boss.x, boss.y - 66).setAlpha(0.65 + Math.sin(this.clock * 12) * 0.3);
       if (this.clock >= state.until) {
         state.phase = 'attack';
+        state.started = this.clock;
         state.until = this.clock + (spec.type === 'plant' ? 1.2 : 1.8);
         state.facing = this.player.x < boss.x ? -1 : 1;
         state.targetX = this.player.x;
         state.targetY = Math.min(spec.y - 10, this.player.y - 12);
         state.volley = 0;
         boss.clearTint();
+        this.bossCue.setVisible(false);
       }
     } else if (state.phase === 'attack') {
       if (spec.type === 'beetle') {
@@ -598,23 +639,34 @@ class Play extends Phaser.Scene {
         boss.setVelocityY((restY - boss.y) * 3);
       }
       if (this.clock >= state.until) {
-        state.phase = 'return'; state.until = this.clock + 1.2;
+        state.phase = 'return'; state.started = this.clock; state.until = this.clock + 1.2;
       }
     } else if (state.phase === 'return') {
       for (const ledge of this.bossPlatforms) { ledge.setVisible(false); ledge.body.enable = false; }
       boss.clearTint();
       boss.setVelocity((spec.x - boss.x) * 3, (spec.y - boss.y) * 3);
-      if (this.clock >= state.until) { state.phase = 'warn'; state.until = this.clock + Math.max(0.75, 1.2 - phase * 0.1); }
+      if (this.clock >= state.until) { state.phase = 'warn'; state.started = this.clock; state.until = this.clock + Math.max(0.75, 1.2 - phase * 0.1); }
     }
     if (boss.x < minX || boss.x > maxX) { boss.x = Math.max(minX, Math.min(maxX, boss.x)); boss.body.updateFromGameObject(); }
     if (boss.y > spec.y) { boss.y = spec.y; boss.body.updateFromGameObject(); }
     boss.setFlipX(state.facing < 0);
-    boss.setTexture(`boss-${spec.type}${this.clock < (state.flashUntil || 0) ? '-hit' : ''}`);
+    const animation = this.bossAnimationTexture(spec.type, state);
+    boss.setTexture(`${animation}${this.clock < (state.flashUntil || 0) ? '-hit' : ''}`);
     boss.setAlpha(this.clock < state.hitUntil && Math.floor(this.clock * 12) % 2 ? 0.5 : 1);
+  }
+
+  bossAnimationTexture(type, state) {
+    const phase = state.phase === 'sleep' ? 'idle' : state.phase;
+    const counts = { idle: 4, warn: 4, attack: 6, recover: 4, return: 4 };
+    const count = counts[phase] || 4;
+    const speed = phase === 'attack' ? 10 : phase === 'warn' ? 7 : 5;
+    const frame = Math.floor(Math.max(0, this.clock - (state.started || 0)) * speed) % count;
+    return `boss-${type}-${phase}${frame}`;
   }
 
   bossRecover(duration) {
     this.bossState.phase = 'recover';
+    this.bossState.started = this.clock;
     this.bossState.until = this.clock + duration;
     this.boss.setVelocity(0, 0);
     for (const ledge of this.bossPlatforms) { ledge.setVisible(true); ledge.body.enable = true; }
@@ -641,6 +693,7 @@ class Play extends Phaser.Scene {
     audio.effect('hit');
     if (state.hp > 0) return;
     this.bossDefeated = true;
+    this.bossCue.setVisible(false);
     this.boss.body.enable = false;
     this.boss.setVelocity(0, 0);
     this.seeds.clear(true, true);
@@ -655,8 +708,29 @@ class Play extends Phaser.Scene {
     if (nextArea > this.save.area) Object.assign(patch, { area: nextArea, checkpoint: null });
     this.persist(patch);
     this.tweens.add({ targets: this.boss, y: this.boss.y + 30, angle: 25, alpha: 0, duration: 650, onComplete: () => this.boss.destroy() });
+    audio.setMusicChapter(6);
     audio.effect('win');
     shell.showToast('Garden restored');
+  }
+
+  startChapterIntro(chapter) {
+    if (this.mode !== 'playing' || chapter?.kind !== 'act') return;
+    this.mode = 'chapter';
+    this.chapterIntroRemaining = 1.8;
+    this.physics.pause();
+    controls.clear();
+    shell.showChapter(chapter, this.level.name);
+    audio.effect('chapter');
+  }
+
+  finishChapterIntro() {
+    if (this.mode !== 'chapter') return;
+    this.mode = 'playing';
+    this.chapterIntroRemaining = 0;
+    this.physics.resume();
+    controls.clear();
+    this.previousFeet = this.player.body.bottom;
+    shell.hideChapter();
   }
 
   finishArea() {
@@ -673,8 +747,11 @@ class Play extends Phaser.Scene {
   refreshHud() {
     const chapter = chapterAt(this.level, this.player.x);
     if (chapter?.id !== this.currentChapter?.id) {
-      if (this.currentChapter && chapter && this.mode === 'playing') shell.showToast(chapter.name);
+      const previous = this.currentChapter;
       this.currentChapter = chapter;
+      this.backdrop.setChapter(chapter?.variant || 0);
+      if (this.save && !this.bossEngaged) audio.setMusicChapter(chapter?.variant || 0);
+      if (previous && chapter?.kind === 'act') this.startChapterIntro(chapter);
     }
     shell.updateHud({ area: chapter?.name || this.level.name, health: this.health, maxHealth: this.maxHealth, emblems: this.collected.size,
       bossName: this.bossEngaged && !this.bossDefeated ? this.level.boss.name : '', bossHealth: this.bossState?.hp || 0,

@@ -6,17 +6,25 @@ const AREA_NAMES = ['meadow', 'cliff', 'canopy', 'roost'];
 const midi = (note) => 440 * 2 ** ((note - 69) / 12);
 const clamp = (value, fallback) => typeof value === 'number' && Number.isFinite(value) ? Math.max(0, Math.min(1, value)) : fallback;
 
-// Original eight-bar themes. Three melodic voices share the harmony, with a
-// separate bass and alternating kick, snare, and hi-hat rhythm.
-const THEMES = [
-  { bpm: 116, roots: [48, 53, 55, 48, 57, 53, 55, 48], minor: false,
-    melody: [0, 4, 7, 12, 9, 7, 4, 2, 0, 4, 7, 9, 12, 7, 4, -1, 2, 7, 11, 14, 12, 11, 7, 2, 4, 7, 12, 7, 9, 4, 2, 0] },
-  { bpm: 124, roots: [50, 55, 57, 50, 59, 55, 57, 50], minor: false,
-    melody: [7, 12, 14, 16, 14, 12, 9, 7, 4, 7, 12, 14, 16, 14, 12, -1, 7, 11, 14, 19, 16, 14, 11, 7, 12, 9, 7, 4, 2, 4, 7, 0] },
-  { bpm: 104, roots: [45, 50, 48, 52, 53, 50, 52, 45], minor: true,
-    melody: [0, 3, 7, 10, 12, 10, 7, 3, 5, 7, 10, 12, 14, 12, 10, -1, 7, 10, 12, 15, 14, 12, 10, 7, 3, 7, 10, 7, 5, 3, 2, 0] },
-  { bpm: 132, roots: [48, 55, 57, 53, 48, 53, 55, 48], minor: false,
-    melody: [12, 7, 12, 16, 19, 16, 14, 12, 9, 12, 16, 19, 21, 19, 16, -1, 14, 11, 14, 19, 17, 14, 11, 7, 12, 16, 19, 16, 14, 12, 7, 12] },
+// Area themes keep a recognizable motif while changing arrangement, response
+// phrase, register, and percussion as each chapter advances.
+export const MUSIC_THEMES = [
+  { bpm: 116, roots: [48, 53, 55, 48, 57, 53, 55, 48, 50, 55, 53, 48, 57, 55, 53, 48], minor: false,
+    lead: 'square', counter: 'triangle', percussion: 'soft',
+    melody: [0, 4, 7, 12, 9, 7, 4, 2, 0, 4, 7, 9, 12, 7, 4, -1, 2, 7, 11, 14, 12, 11, 7, 2, 4, 7, 12, 7, 9, 4, 2, 0],
+    answer: [7, 9, 12, 9, 7, 4, 2, -1, 4, 7, 9, 14, 12, 9, 7, 4, 0, 2, 4, 7, 9, 7, 4, 2, 7, 12, 16, 14, 12, 9, 7, 0] },
+  { bpm: 124, roots: [50, 55, 57, 50, 59, 55, 57, 50, 52, 57, 59, 55, 50, 57, 55, 50], minor: false,
+    lead: 'square', counter: 'sawtooth', percussion: 'driving',
+    melody: [7, 12, 14, 16, 14, 12, 9, 7, 4, 7, 12, 14, 16, 14, 12, -1, 7, 11, 14, 19, 16, 14, 11, 7, 12, 9, 7, 4, 2, 4, 7, 0],
+    answer: [14, 12, 9, 7, 12, 14, 16, -1, 7, 9, 11, 14, 19, 16, 14, 11, 4, 7, 12, 16, 14, 11, 9, 7, 12, 16, 14, 12, 9, 7, 4, 0] },
+  { bpm: 104, roots: [45, 50, 48, 52, 53, 50, 52, 45, 48, 53, 50, 45, 52, 50, 48, 45], minor: true,
+    lead: 'triangle', counter: 'square', percussion: 'hollow',
+    melody: [0, 3, 7, 10, 12, 10, 7, 3, 5, 7, 10, 12, 14, 12, 10, -1, 7, 10, 12, 15, 14, 12, 10, 7, 3, 7, 10, 7, 5, 3, 2, 0],
+    answer: [12, 10, 7, 3, 5, 7, 10, -1, 3, 5, 7, 12, 10, 7, 5, 3, 7, 10, 15, 14, 12, 10, 7, -1, 5, 3, 2, 3, 7, 5, 3, 0] },
+  { bpm: 132, roots: [48, 55, 57, 53, 48, 53, 55, 48, 57, 60, 55, 53, 50, 55, 57, 48], minor: false,
+    lead: 'triangle', counter: 'square', percussion: 'bright',
+    melody: [12, 7, 12, 16, 19, 16, 14, 12, 9, 12, 16, 19, 21, 19, 16, -1, 14, 11, 14, 19, 17, 14, 11, 7, 12, 16, 19, 16, 14, 12, 7, 12],
+    answer: [19, 16, 14, 12, 16, 19, 21, -1, 14, 17, 19, 24, 21, 19, 16, 14, 12, 14, 16, 19, 17, 14, 12, 9, 7, 12, 16, 14, 12, 9, 7, 12] },
 ];
 
 export class AudioEngine {
@@ -30,6 +38,8 @@ export class AudioEngine {
     this._voices = new Set();
     this._timer = null;
     this._area = null;
+    this._chapter = 0;
+    this._musicMode = 'level';
     this._step = 0;
     this._nextNote = 0;
     this._paused = false;
@@ -230,25 +240,36 @@ export class AudioEngine {
     switch (name) {
       case 'jump': tone(290, 0.16, 0.19, 'square', 740); break;
       case 'glide': tone(800, 0.22, 0.1, 'triangle', 400); noise(0.12, 0.035, 1800); break;
+      case 'spring': tone(220, 0.09, 0.16, 'square', 520); tone(440, 0.14, 0.1, 'triangle', 760, 0.05); break;
       case 'peck': tone(900, 0.07, 0.15, 'square', 190); noise(0.045, 0.09, 1000); break;
       case 'hit': tone(160, 0.22, 0.23, 'sawtooth', 45); noise(0.17, 0.16, 500); break;
       case 'flower': tone(midi(79), 0.11, 0.16); tone(midi(86), 0.19, 0.12, 'triangle', null, 0.07); break;
       case 'checkpoint': tone(midi(72), 0.24, 0.13, 'triangle'); tone(midi(76), 0.22, 0.11, 'triangle', null, 0.06); tone(midi(79), 0.28, 0.12, 'square', null, 0.12); break;
+      case 'chapter': tone(midi(67), 0.13, 0.12, 'triangle'); tone(midi(72), 0.18, 0.12, 'square', null, 0.08); tone(midi(79), 0.26, 0.1, 'triangle', null, 0.16); break;
       case 'boss': tone(82, 0.35, 0.23, 'sawtooth', 41); tone(123, 0.3, 0.12, 'square', 61); noise(0.2, 0.13, 250); break;
       case 'win': tone(midi(72), 0.3, 0.14); tone(midi(76), 0.32, 0.12, 'triangle', null, 0.06); tone(midi(79), 0.38, 0.11, 'square', null, 0.12); tone(midi(84), 0.5, 0.12, 'triangle', null, 0.16); break;
       case 'menu': tone(620, 0.065, 0.12, 'triangle', 930); break;
     }
   }
 
-  startMusic(area = 0) {
+  startMusic(area = 0, chapter = 0, mode = 'level') {
     if (this._destroyed) return;
     const at = typeof area === 'string' ? AREA_NAMES.indexOf(area) : area;
-    if (!Number.isInteger(at) || at < 0 || at >= THEMES.length) throw new RangeError('Unknown music area');
-    if (this._area === at && this._timer !== null) return;
+    if (!Number.isInteger(at) || at < 0 || at >= MUSIC_THEMES.length) throw new RangeError('Unknown music area');
+    const nextChapter = Math.max(0, Math.min(6, Number(chapter) || 0));
+    const nextMode = mode === 'boss' ? 'boss' : 'level';
+    if (this._area === at && this._chapter === nextChapter && this._musicMode === nextMode && this._timer !== null) return;
     this._haltMusic();
     this._area = at;
+    this._chapter = nextChapter;
+    this._musicMode = nextMode;
     this._step = 0;
     this._restartMusic();
+  }
+
+  setMusicChapter(chapter = 0, mode = 'level') {
+    if (this._area === null || this._destroyed) return;
+    this.startMusic(this._area, chapter, mode);
   }
 
   _restartMusic() {
@@ -259,19 +280,19 @@ export class AudioEngine {
 
   _scheduleMusic() {
     if (!this._canMusic()) { this._haltMusic(); return; }
-    const theme = THEMES[this._area];
+    const theme = MUSIC_THEMES[this._area];
     const stepLength = 60 / theme.bpm / 4;
     const now = this.context.currentTime;
     // Skip missed beats after main-thread stalls instead of replaying a backlog.
     if (this._nextNote < now) {
       const missed = Math.ceil((now - this._nextNote) / stepLength);
-      this._step = (this._step + missed) % 128;
+      this._step = (this._step + missed) % 256;
       this._nextNote = now + 0.015;
     }
     let scheduled = 0;
     while (this._nextNote < now + HORIZON && scheduled++ < 4) {
       this._musicStep(theme, this._step, this._nextNote, stepLength);
-      this._step = (this._step + 1) % 128;
+      this._step = (this._step + 1) % 256;
       this._nextNote += stepLength;
     }
     this._timer = setTimeout(() => {
@@ -281,26 +302,48 @@ export class AudioEngine {
   }
 
   _musicStep(theme, step, when, beat) {
+    if (this._musicMode === 'boss') { this._bossMusicStep(theme, step, when, beat); return; }
     const bar = Math.floor(step / 16);
     const phase = step % 16;
-    const root = theme.roots[bar];
+    const root = theme.roots[bar % theme.roots.length];
     const third = theme.minor ? 3 : 4;
     const note = (offset, duration, volume, type) => this._voice('music', when, duration, midi(root + offset), volume, type);
     if (phase % 2 === 0) {
-      const melody = theme.melody[(bar % 4) * 8 + phase / 2];
-      if (melody !== -1) note(24 + melody, beat * 1.65, 0.085, 'square');
-      // Second voice: soft, syncopated broken chords underneath the lead.
-      note(12 + [0, third, 7, third][(phase / 2 + bar) % 4], beat * 1.4, 0.045, 'triangle');
+      const phrase = Math.floor(bar / 4) % 2 ? theme.answer : theme.melody;
+      const melody = phrase[(bar % 4) * 8 + phase / 2];
+      if (melody !== -1 && !(this._chapter === 0 && phase % 4 === 2)) {
+        const lift = [0, 0, 0, 2, 0, 5, 0][this._chapter];
+        note(24 + melody + lift, beat * (phase === 14 ? 2.6 : 1.65), 0.072 + this._chapter * 0.0025, theme.lead);
+      }
+      const chord = [0, third, 7, this._chapter >= 4 ? 10 : third][(phase / 2 + bar) % 4];
+      note(12 + chord, beat * 1.5, this._chapter >= 1 ? 0.042 : 0.03, theme.counter);
     }
-    // Third voice answers the melody near the end of each bar.
-    if ([3, 7, 11, 15].includes(phase)) note(19 + (phase === 15 ? third : 0), beat * 0.8, 0.026, 'square');
-    if (phase % 4 === 0) note(phase === 8 ? 7 : 0, beat * 2.6, 0.15, 'triangle');
-    if (phase === 0 || phase === 8) this._voice('music', when, 0.12, 125, 0.18, 'sine', 38);
-    if (phase === 4 || phase === 12) {
+    // Later chapters add a syncopated answer without replacing the area's tune.
+    if (this._chapter >= 2 && [3, 7, 11, 15].includes(phase)) {
+      note(17 + [0, 7, third, 12][(phase - 3) / 4], beat * 0.78, 0.024 + this._chapter * 0.002, theme.counter);
+    }
+    if (phase % 4 === 0) note(phase === 8 ? 7 : phase === 12 && this._chapter >= 3 ? third : 0, beat * 2.6, 0.13, 'triangle');
+    if (phase === 0 || phase === 8 || (this._chapter >= 4 && phase === 12)) this._voice('music', when, 0.12, 125, 0.15, 'sine', 38);
+    const snarePhases = theme.percussion === 'driving' ? [4, 10, 12] : theme.percussion === 'hollow' ? [6, 14] : [4, 12];
+    if (snarePhases.includes(phase)) {
       this._voice('music', when, 0.11, 0, 0.085, 'square', null, true, { type: 'highpass', frequency: 1500 });
       this._voice('music', when, 0.07, 175, 0.035, 'triangle', 90);
     }
-    if (phase % 2 === 0) this._voice('music', when, 0.035, 0, 0.025, 'square', null, true, { type: 'highpass', frequency: 7000 });
+    const hatEvery = this._chapter >= 3 || theme.percussion === 'bright' ? 2 : 4;
+    if (phase % hatEvery === 0) this._voice('music', when, 0.035, 0, 0.018 + this._chapter * 0.0015, 'square', null, true, { type: 'highpass', frequency: 6500 });
+    if (phase === 0 && bar % 4 === 0) note(12 + (bar % 8 ? 7 : 0), beat * 10, 0.018, 'sine');
+  }
+
+  _bossMusicStep(theme, step, when, beat) {
+    const bar = Math.floor(step / 16);
+    const phase = step % 16;
+    const root = theme.roots[(bar * 3) % theme.roots.length] - 12;
+    const pulse = [0, 0, 7, 0, 3, 0, 10, 7][Math.floor(phase / 2)];
+    if (phase % 2 === 0) this._voice('music', when, beat * 1.45, midi(root + 12 + pulse), 0.072, theme.lead);
+    if ([0, 3, 6, 8, 11, 14].includes(phase)) this._voice('music', when, beat * 2.1, midi(root + (phase === 8 ? 7 : 0)), 0.15, 'sawtooth');
+    if (phase % 4 === 0) this._voice('music', when, 0.13, 105, 0.18, 'sine', 36);
+    if ([4, 12].includes(phase)) this._voice('music', when, 0.12, 0, 0.11, 'square', null, true, { type: 'highpass', frequency: 1200 });
+    if (phase % 2 === 1) this._voice('music', when, 0.035, 0, 0.022, 'square', null, true, { type: 'highpass', frequency: 6200 });
   }
 
   _haltMusic() {
@@ -309,7 +352,7 @@ export class AudioEngine {
     this._stopVoices('music');
   }
 
-  stopMusic() { this._area = null; this._step = 0; this._haltMusic(); }
+  stopMusic() { this._area = null; this._chapter = 0; this._musicMode = 'level'; this._step = 0; this._haltMusic(); }
 
   pause() {
     this._paused = true;

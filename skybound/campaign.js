@@ -79,13 +79,52 @@ const ENCOUNTERS = {
   canopy: [['plant', 'hopper'], ['bird', 'beetle'], ['shellback', 'plant'], ['moth', 'hopper'], ['plant', 'bird'], ['shellback', 'moth']],
 };
 
+// A chapter is more than a room ordering. These identities drive its route
+// feature, title card, backdrop details, and musical arrangement.
+const CHAPTER_IDENTITIES = {
+  meadow: [
+    ['Open Trail', 'A bright run through low flowered terraces.', 'trail'],
+    ['Turning Sails', 'Moving platforms keep time with the windmills.', 'lift'],
+    ['Honeyguard Duel', 'Armored patrols hold the low road.', 'duel'],
+    ['Bloom Bounce', 'Spring blooms open a playful high route.', 'spring'],
+    ['Bramble Drafts', 'Updrafts and fliers rule the crossing.', 'gust'],
+    ['Golden Relay', 'Every meadow skill returns in quick succession.', 'relay'],
+  ],
+  cliff: [
+    ['Crosswind Run', 'Ride the gusts between broken shelves.', 'gust'],
+    ['Echo Descent', 'A grounded duel through the quiet ravine.', 'duel'],
+    ['Kite Lifts', 'Moving ledges climb the open sky.', 'lift'],
+    ['Splitstone Springs', 'Bounce from crag to crag above the pass.', 'spring'],
+    ['Cloudbreak Flight', 'Aerial patrols sweep the exposed crossing.', 'gust'],
+    ['Gale Relay', 'The mountain tests every route at once.', 'relay'],
+  ],
+  canopy: [
+    ['Rootbound Trail', 'A close, winding run beneath old branches.', 'trail'],
+    ['Lantern Lifts', 'Living platforms rise through the glowing grove.', 'lift'],
+    ['Waterway Guard', 'Heavy sentries crowd the forest floor.', 'duel'],
+    ['Mothlight Springs', 'Spring blooms reach the lantern boughs.', 'spring'],
+    ['Thornwind Maze', 'Hidden drafts carry danger through the leaves.', 'gust'],
+    ['Heartwood Relay', 'Roots, wind, and wings meet at the old tree.', 'relay'],
+  ],
+};
+
+function encounterFor(area, mechanic, roomIndex, index) {
+  const ordinary = ENCOUNTERS[area][roomIndex % 6][index];
+  if (mechanic === 'duel') return index === 0 ? (area === 'canopy' ? 'plant' : 'shellback') : (area === 'cliff' ? 'shellback' : 'hopper');
+  if (mechanic === 'gust') return (roomIndex + index) % 2 ? 'bird' : 'moth';
+  if (mechanic === 'spring') return index === 0 ? 'hopper' : (area === 'canopy' ? 'moth' : 'bird');
+  if (mechanic === 'lift') return index === 0 ? ordinary : (area === 'meadow' ? 'beetle' : 'moth');
+  return ordinary;
+}
+
 export function extendLevel(original) {
   if (!CHAPTERS[original.id]) return original;
   const level = structuredClone(original);
+  level.springs = level.springs || [];
   const insertAt = level.terrain.at(-1).x;
   const floor = level.terrain.at(-1).y;
   const length = CHAPTERS[level.id].reduce((sum, [, rooms]) => sum + rooms.length * ROOM_WIDTH, 0);
-  for (const key of ['terrain', 'platforms', 'enemies', 'flowers', 'emblems', 'checkpoints', 'gusts']) {
+  for (const key of ['terrain', 'platforms', 'enemies', 'flowers', 'emblems', 'checkpoints', 'gusts', 'springs']) {
     for (const entry of level[key]) {
       if (entry.x >= insertAt || entry.id?.endsWith('-boss') || entry.id?.endsWith('-boss-rest')) entry.x += length;
     }
@@ -94,11 +133,13 @@ export function extendLevel(original) {
   level.boss.x += length;
   level.boss.arena.x += length;
   level.exit.x += length;
-  level.chapters = [{ id: `${level.id}-opening`, name: level.name, x: 0, endX: insertAt }];
+  level.chapters = [{ id: `${level.id}-opening`, name: level.name, x: 0, endX: insertAt, kind: 'opening', variant: 0 }];
   let cursor = insertAt;
   CHAPTERS[level.id].forEach(([name, roomNames], chapterIndex) => {
     const chapterId = `${level.id}-chapter-${chapterIndex + 1}`;
-    level.chapters.push({ id: chapterId, name, x: cursor, endX: cursor + ROOM_WIDTH * roomNames.length });
+    const [style, tagline, mechanic] = CHAPTER_IDENTITIES[level.id][chapterIndex];
+    level.chapters.push({ id: chapterId, name, style, tagline, mechanic, kind: 'act', act: chapterIndex + 1,
+      count: CHAPTERS[level.id].length, variant: chapterIndex, x: cursor, endX: cursor + ROOM_WIDTH * roomNames.length });
     roomNames.forEach((roomName, roomIndex) => {
       const room = ROOMS[roomName];
       const id = `${chapterId}-room-${roomIndex + 1}`;
@@ -118,9 +159,22 @@ export function extendLevel(original) {
         level.gusts.push({ x: rectX(x, w), y: floor - rise, w, h });
       }
       const surface = x => ground.find(rect => x >= rect.x && x < rect.x + rect.w)?.y;
+      const roomMechanic = mechanic === 'relay' ? ['lift', 'spring', 'gust'][roomIndex % 3] : mechanic;
+      if (roomMechanic === 'lift' && roomIndex % 2 === 1) {
+        level.platforms.push({ x: cursor + 448, y: floor - 104, w: 80, h: 8, oneWay: true,
+          move: { axis: roomIndex % 4 === 1 ? 'x' : 'y', distance: 64, speed: 26 + chapterIndex * 2 } });
+      }
+      if (roomMechanic === 'spring' && roomIndex % 2 === 0) {
+        const base = ground[roomIndex % ground.length];
+        const x = base.x + Math.min(base.w - 12, Math.max(12, Math.floor(base.w / 2)));
+        level.springs.push({ id: `${id}-spring`, x, y: base.y });
+      }
+      if (roomMechanic === 'gust' && roomIndex % 2 === 1) {
+        level.gusts.push({ x: cursor + 464, y: floor - 144, w: 64, h: 144 });
+      }
       room.encounters.forEach((localX, index) => {
         const x = pointX(localX);
-        const type = ENCOUNTERS[level.id][(chapterIndex + roomIndex) % 6][index];
+        const type = encounterFor(level.id, roomMechanic, chapterIndex + roomIndex, index);
         const flying = type === 'bird' || type === 'moth';
         // Flying patrols sit above the highest ground in their whole lane.
         const y = flying ? Math.min(...ground.filter(rect => rect.x < x + 96 && rect.x + rect.w > x - 96).map(rect => rect.y)) - 64 : surface(x);
@@ -137,8 +191,9 @@ export function extendLevel(original) {
       cursor += ROOM_WIDTH;
     });
   });
-  level.chapters.push({ id: `${level.id}-boss`, name: level.boss.name, x: cursor, endX: level.width });
-  for (const key of ['terrain', 'platforms', 'enemies', 'flowers', 'emblems', 'checkpoints', 'gusts']) level[key].sort((a, b) => a.x - b.x);
+  level.chapters.push({ id: `${level.id}-boss`, name: level.boss.name, style: 'Boss', tagline: 'The garden guardian awaits.',
+    kind: 'boss', variant: 6, x: cursor, endX: level.width });
+  for (const key of ['terrain', 'platforms', 'enemies', 'flowers', 'emblems', 'checkpoints', 'gusts', 'springs']) level[key].sort((a, b) => a.x - b.x);
   return level;
 }
 

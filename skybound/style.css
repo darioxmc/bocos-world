@@ -16,6 +16,13 @@ button.icon-button { padding:3px; width:30px; min-height:26px; font-size:16px; }
 .screen { position:relative; width:min(100%, calc(var(--available-height) * 4 / 3), 960px); aspect-ratio:4/3; flex:none; overflow:hidden; background:#182e23; border:2px solid #6a8770; box-shadow:0 0 0 4px #101e18, 0 14px 45px #0008; isolation:isolate; }
 #game-mount { position:absolute; inset:0; }
 #game-mount canvas { display:block; width:100% !important; height:100% !important; image-rendering:pixelated; }
+.chapter-card { position:absolute; inset:0; z-index:15; display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; padding:20px; background:#07150fe8; color:var(--ink); }
+.chapter-card::before, .chapter-card::after { content:''; width:min(220px, 76%); height:2px; background:linear-gradient(90deg, transparent, var(--gold), transparent); margin:8px 0; }
+.chapter-area { color:var(--muted); font-size:9px; text-transform:uppercase; }
+.chapter-number { color:var(--gold); font-size:11px; margin-top:8px; }
+.chapter-name { color:#fff4c2; font-size:22px; line-height:1.15; margin:5px 0; max-width:90%; }
+.chapter-style { color:#8ed0c5; font-size:10px; text-transform:uppercase; }
+.chapter-tagline { color:var(--muted); font-size:10px; line-height:1.45; margin-top:7px; max-width:34ch; }
 #overlay { position:absolute; inset:0; z-index:20; background:#081710dc; display:flex; flex-direction:column; padding:clamp(10px, 3%, 24px); overflow:auto; overscroll-behavior:contain; }
 #overlay.title { background:linear-gradient(180deg, #09201730, #08191050 40%, #081910e8); justify-content:flex-end; }
 .menu { width:100%; max-width:560px; margin:auto; }
