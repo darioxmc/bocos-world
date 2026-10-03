@@ -135,7 +135,13 @@ export class InputController {
     if (event.ctrlKey || event.metaKey || event.altKey) return;
     const editable = event.target?.matches?.('input, select, textarea, [contenteditable="true"]');
     const actions = this.actionsFor(this.bindings, event.code);
-    if (editable && this.menu) return;
+    if (editable && this.menu) {
+      // Sliders retain native left/right adjustment, but must not trap menu navigation.
+      const menuNavigation = ['Escape', 'ArrowUp', 'ArrowDown'].includes(event.code);
+      const nativeSelect = event.target.matches('select') && event.code !== 'Escape';
+      const textEntry = event.target.matches('textarea, [contenteditable="true"], input:not([type="range"]):not([type="checkbox"])') && event.code !== 'Escape';
+      if (!menuNavigation || nativeSelect || textEntry) return;
+    }
     if (actions.length || (this.menu && ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Enter', 'Escape', 'Space'].includes(event.code))) event.preventDefault();
     if (event.repeat || this.keys.has(event.code)) return;
     this.keys.add(event.code);

@@ -58,6 +58,9 @@ containing Playwright when not using the bundled desktop runtime. It writes
 desktop/phone screenshots and an art atlas under `qa/`.
 `node tools/traverse.mjs` walks all four mandatory paths with actual Arcade
 collision bodies and combat disabled, checking for blocked routes and falls.
+`node tools/verify-playtest.mjs` checks boss-charge jump clearance with combat
+enabled, boss contact between attacks, keyboard Settings navigation, and
+simultaneous browser touch contacts with independent release.
 
 Browser checks cover keyboard movement, gliding, combat, boss vulnerability
 and gates, menu transitions, simulated gamepad inputs/disconnection, simultaneous

@@ -1,4 +1,4 @@
-export const MOVE = Object.freeze({ speed: 115, acceleration: 1100, braking: 1500, gravity: 800, jump: 280, glideFall: 55, coyote: 0.10, buffer: 0.12 });
+export const MOVE = Object.freeze({ speed: 115, acceleration: 1100, braking: 1500, gravity: 800, jump: 320, glideFall: 55, coyote: 0.10, buffer: 0.12 });
 
 export function overlaps(a, b) {
   return a.x < b.x + b.width && a.x + a.width > b.x && a.y < b.y + b.height && a.y + a.height > b.y;

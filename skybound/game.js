@@ -581,11 +581,12 @@ class Play extends Phaser.Scene {
   bossContact() {
     if (!this.bossEngaged || this.bossDefeated || this.mode !== 'playing' || this.deathUntil) return;
     const stomping = isStomp(this.previousFeet, this.previousVelocityY, this.boss.body.top);
+    const dangerous = this.bossState.phase === 'attack' || this.bossState.phase === 'warn';
     if (stomping) {
       this.player.setVelocityY(controls.down('jump') ? -MOVE.jump : -225);
       if (this.bossState.phase === 'recover') this.hitBoss();
-      else this.damage(this.boss.x);
-    } else this.damage(this.boss.x);
+      else if (dangerous) this.damage(this.boss.x);
+    } else if (dangerous) this.damage(this.boss.x);
   }
 
   hitBoss() {
