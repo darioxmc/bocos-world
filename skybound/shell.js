@@ -158,8 +158,9 @@ export class Shell {
       main.append(node('strong', '', `${index + 1}  ${slot ? slot.name : 'New Game'}`));
       if (slot) {
         const area = LEVELS[slot.area]?.name || 'Skybound';
+        const checkpoint = LEVELS[slot.area]?.checkpoints.find(point => point.id === slot.checkpoint);
         const summary = node('small', 'slot-summary');
-        for (const text of [area, `${slot.emblems?.length || 0} emblems`, `Time ${playtimeLabel(slot.playtime)}`, slot.checkpoint ? 'Checkpoint saved' : 'Area start', ...(slot.completed ? ['Complete'] : [])]) summary.append(node('span', '', text), document.createTextNode(' '));
+        for (const text of [area, `${slot.emblems?.length || 0} emblems`, `Time ${playtimeLabel(slot.playtime)}`, checkpoint?.name || (slot.checkpoint ? 'Checkpoint saved' : 'Area start'), ...(slot.completed ? ['Complete'] : [])]) summary.append(node('span', '', text), document.createTextNode(' '));
         main.append(summary);
       } else main.append(node('small', '', 'Empty'));
       const tools = node('div', 'slot-tools');
@@ -479,7 +480,10 @@ export class Shell {
       default: break;
     }
   }
-  updateHud({area, health, maxHealth, emblems, bossName, bossHealth, bossMax, gliding}) {
+  updateHud(state) {
+    if (this.hudState && Object.keys(state).every(key => state[key] === this.hudState[key])) return;
+    this.hudState = { ...state };
+    const {area, health, maxHealth, emblems, bossName, bossHealth, bossMax, gliding} = state;
     document.getElementById('hud-area').textContent = area ?? '';
     const maximum = Math.max(0, Math.min(12, Number(maxHealth) || 3));
     const current = Math.max(0, Math.min(maximum, Number(health) || 0));

@@ -1,10 +1,12 @@
 import { createArt, createBackdrop } from './art.js';
 import { LEVELS } from './levels.js';
+import { chapterAt } from './campaign.js';
 import { InputController } from './input.js';
 import { Shell } from './shell.js';
 import { SaveStore } from './saves.js';
 import { AudioEngine } from './audio.js';
 import { MOVE, overlaps, canLand, isStomp, attackBox, approach } from './mechanics.js';
+import { navigationSurfaces, groundDirection, constrainFlight } from './enemy-navigation.js';
 
 const Phaser = window.Phaser;
 const audio = new AudioEngine();
@@ -24,6 +26,7 @@ class Play extends Phaser.Scene {
     this.save = this.slotIndex === null ? null : (SaveStore.get(this.slotIndex) || SaveStore.create(this.slotIndex));
     this.areaIndex = this.save ? Math.min(3, Math.max(0, data.area ?? this.save.area)) : 0;
     this.level = LEVELS[this.areaIndex];
+    this.currentChapter = null;
     this.clock = 0;
     this.pendingPlaytime = 0;
     this.mode = this.save ? 'playing' : 'title';
@@ -57,6 +60,8 @@ class Play extends Phaser.Scene {
     this.ground = this.physics.add.staticGroup();
     this.ledges = this.physics.add.group({ allowGravity: false, immovable: true });
     this.buildTerrain();
+    // Distant optional ledges do not need dynamic physics until approached.
+    for (const platform of this.ledges.getChildren()) platform.body.enable = Math.abs(platform.x - this.checkpoint.x) < 800;
     this.player = this.physics.add.sprite(this.checkpoint.x, this.checkpoint.y, 'boco-idle').setOrigin(0.5, 1).setDepth(8);
     this.player.body.setSize(18, 26).setOffset(7, 6);
     this.player.body.setMaxVelocity(150, 520).setCollideWorldBounds(true);
@@ -129,7 +134,8 @@ class Play extends Phaser.Scene {
       enemy.body.setSize(flying ? 22 : 23, flying ? 14 : 21).setOffset(flying ? 5 : 4, flying ? 10 : 11);
       enemy.body.setAllowGravity(!flying);
       enemy.setData('flying', flying);
-      this.enemyData.set(enemy, { ...entry, startX: entry.x, startY: entry.y, dir: -1, timer: 0, phase: 'patrol', hp: entry.type === 'shellback' ? 2 : 1, dead: false });
+      this.enemyData.set(enemy, { ...entry, startX: entry.x, startY: entry.y, dir: -1, timer: 0, phase: 'patrol', hp: entry.type === 'shellback' ? 2 : 1, dead: false,
+        surfaces: navigationSurfaces(this.level, entry), worldWidth: this.level.width, worldHeight: this.level.height, suspended: false });
     }
   }
 
@@ -199,7 +205,7 @@ class Play extends Phaser.Scene {
       sprite.setTint(0xffed88);
       this.persist(this.areaIndex === this.save.area ? { checkpoint: id, health: this.health } : {});
       audio.effect('checkpoint');
-      shell.showToast('Checkpoint');
+      shell.showToast(this.checkpoint.name || 'Checkpoint');
     } else if (kind === 'exit' && this.bossDefeated && !this.areaFinished) {
       this.finishArea();
     }
@@ -277,6 +283,15 @@ class Play extends Phaser.Scene {
 
   updatePlatforms() {
     for (const platform of this.ledges.getChildren()) {
+      if (!this.bossPlatforms.includes(platform)) {
+        const nearby = Math.abs(platform.x - this.player.x) < 800;
+        if (platform.body.enable !== nearby) {
+          platform.body.enable = nearby;
+          if (nearby) platform.body.reset(platform.x, platform.y);
+          else platform.body.setVelocity(0, 0);
+        }
+        if (!nearby) continue;
+      }
       const motion = platform.getData('motion');
       if (!motion) continue;
       if (platform[motion.axis] >= motion.origin + motion.distance) motion.dir = -1;
@@ -352,13 +367,27 @@ class Play extends Phaser.Scene {
   updateEnemies(dt) {
     for (const [enemy, state] of this.enemyData) {
       if (!enemy.active || state.dead) continue;
-      if (Math.abs(enemy.x - this.player.x) > 600) { enemy.setVelocity(0, 0); continue; }
-      state.timer -= dt;
       const body = enemy.body;
+      const distance = Math.abs(enemy.x - this.player.x);
+      if (distance > (state.suspended ? 600 : 720)) {
+        if (!state.suspended) {
+          state.sleepVelocity = { x: body.velocity.x, y: body.velocity.y };
+          state.suspended = true;
+          body.enable = false;
+        }
+        continue;
+      }
+      if (state.suspended) {
+        state.suspended = false;
+        body.enable = true;
+        body.reset(enemy.x, enemy.y);
+        body.setVelocity(state.sleepVelocity.x, state.sleepVelocity.y);
+      }
+      state.timer -= dt;
       if (state.type === 'bird' || state.type === 'moth') {
         const flight = state.type === 'bird' ? 25 : 15;
-        body.setVelocityX(state.dir * flight);
         if (Math.abs(enemy.x - state.startX) >= (state.range || 55)) state.dir = enemy.x > state.startX ? -1 : 1;
+        body.setVelocityX(state.dir * flight);
         const bob = state.type === 'bird' ? 5 : 16;
         const targetY = state.startY + Math.sin(this.clock * 2 + state.startX) * bob;
         body.setVelocityY((targetY - enemy.y) * 4);
@@ -375,6 +404,7 @@ class Play extends Phaser.Scene {
           body.setVelocity(Math.cos(angle) * 115, Math.sin(angle) * 115);
           if (state.timer <= 0) { state.phase = 'patrol'; state.timer = 2.5; }
         }
+        constrainFlight(enemy, state, dt);
       } else if (state.type === 'plant') {
         body.setVelocityX(0);
         if (state.timer <= 0 && Math.abs(enemy.x - this.player.x) < 210) { state.phase = state.phase === 'warn' ? 'patrol' : 'warn'; state.timer = state.phase === 'warn' ? 0.7 : 2.8; if (state.phase === 'patrol') this.fireSeed(enemy.x, enemy.y - 18, this.player.x, this.player.y - 15, 85); }
@@ -384,15 +414,16 @@ class Play extends Phaser.Scene {
         if (state.timer <= 0 && Math.abs(enemy.x - this.player.x) < 145 && (body.blocked.down || body.touching.down)) {
           state.phase = state.phase === 'warn' ? 'patrol' : 'warn';
           state.timer = state.phase === 'warn' ? 0.55 : 2.3;
-          if (state.phase === 'patrol') { state.dir = this.player.x < enemy.x ? -1 : 1; body.setVelocity(state.dir * 65, -210); }
+          if (state.phase === 'patrol') {
+            state.dir = this.player.x < enemy.x ? -1 : 1;
+            body.setVelocity(groundDirection(enemy, state, 65, dt) * 65, -210);
+          }
         }
-        if (!body.blocked.down && !body.touching.down && state.phase === 'patrol') body.setVelocityX(state.dir * 65);
+        if (!body.blocked.down && !body.touching.down && state.phase === 'patrol') body.setVelocityX(groundDirection(enemy, state, 65, dt) * 65);
         if (state.phase === 'warn') enemy.setTint(0xffdb7b); else enemy.clearTint();
       } else {
-        const ahead = enemy.x + state.dir * 18;
-        const supported = [...this.level.terrain, ...this.level.platforms].some((rect) => ahead >= rect.x && ahead <= rect.x + rect.w && Math.abs(rect.y - body.bottom) <= 12);
-        if (body.blocked.left || body.blocked.right || Math.abs(enemy.x - state.startX) > (state.range || 65) || (!supported && (body.blocked.down || body.touching.down))) state.dir *= -1;
-        body.setVelocityX(state.dir * (state.type === 'shellback' ? 22 : 33));
+        const speed = state.type === 'shellback' ? 22 : 33;
+        body.setVelocityX(groundDirection(enemy, state, speed, dt) * speed);
       }
       const frame = Math.floor(this.clock * (enemy.getData('flying') ? 10 : 8)) % 4;
       const texture = `${state.type}-${enemy.getData('flying') ? 'flap' : 'run'}${frame}`;
@@ -627,7 +658,12 @@ class Play extends Phaser.Scene {
   }
 
   refreshHud() {
-    shell.updateHud({ area: this.level.name, health: this.health, maxHealth: this.maxHealth, emblems: this.collected.size,
+    const chapter = chapterAt(this.level, this.player.x);
+    if (chapter?.id !== this.currentChapter?.id) {
+      if (this.currentChapter && chapter && this.mode === 'playing') shell.showToast(chapter.name);
+      this.currentChapter = chapter;
+    }
+    shell.updateHud({ area: chapter?.name || this.level.name, health: this.health, maxHealth: this.maxHealth, emblems: this.collected.size,
       bossName: this.bossEngaged && !this.bossDefeated ? this.level.boss.name : '', bossHealth: this.bossState?.hp || 0,
       bossMax: this.bossState?.max || 6, gliding: this.gliding });
   }

@@ -20,6 +20,13 @@ moving platforms, collect flower emblems, and restore the gardens. Flowers
 heal without granting invulnerability. Damage turns Boco's white center red.
 Checkpoints and unlimited retries keep the game approachable.
 
+The main campaign includes eighteen additional named chapters, assembled from
+authored terrain and optional upper-route rooms with varied encounter sequences.
+Each chapter has three checkpoints; existing checkpoint IDs and saves remain
+valid. The required route measures **21.04 minutes** at normal simulation speed
+with combat disabled, before bosses, detours, or retries. Human completion time
+will vary; this is a movement benchmark, not a timed lock or a speed reduction.
+
 Keyboard: arrows/WASD move; Space/W/Up jump; Z/J attack; X/K glide;
 Down crouches and Down+Jump drops through marked platforms; Escape/Enter pause.
 Bindings can be changed in Settings. Touch supports simultaneous d-pad/action
@@ -39,7 +46,8 @@ Completed areas can be replayed without reducing unlocked progression.
 
 - `game.js`: Phaser Arcade simulation, combat, enemies, bosses, progression.
 - `mechanics.js`: collision rules and movement constants.
-- `levels.js`: independent map and encounter data, in world pixels.
+- `levels.js`, `campaign.js`: map data and authored chapter sequences, in world pixels.
+- `enemy-navigation.js`: terrain-aware patrol, hop, and flight constraints.
 - `art.js`: original, deterministic raster pixel textures and parallax layers.
 - `input.js`, `shell.js`, `style.css`: input aggregation, menus, responsive shell.
 - `saves.js`, `audio.js`: validated persistence and bounded Web Audio synthesis.
@@ -58,6 +66,13 @@ containing Playwright when not using the bundled desktop runtime. It writes
 desktop/phone screenshots and an art atlas under `qa/`.
 `node tools/traverse.mjs` walks all four mandatory paths with actual Arcade
 collision bodies and combat disabled, checking for blocked routes and falls.
+It also verifies that the main-route movement exceeds twenty minutes.
+`node tools/play-campaign.mjs` attempts the expanded main routes with ordinary
+health, active enemies, checkpoint respawns, jumping, pecking, and gliding.
+`node tools/verify-campaign.mjs` checks every checkpoint, save/Continue flows,
+chapter transitions, phone/desktop layouts, canvas rendering, and frame timing.
+`node tools/verify-enemies.mjs` stress-tests map enemy spawns and targeted
+wall, ledge, patrol-boundary, and offscreen suspension cases in Arcade physics.
 `node tools/verify-playtest.mjs` checks boss-charge jump clearance with combat
 enabled, boss contact between attacks, keyboard Settings navigation, and
 simultaneous browser touch contacts with independent release.
@@ -66,4 +81,5 @@ Browser checks cover keyboard movement, gliding, combat, boss vulnerability
 and gates, menu transitions, simulated gamepad inputs/disconnection, simultaneous
 touches, sliding d-pad, canvas pixels, and iPhone-sized portrait/landscape layouts.
 Real iPhone Safari and physical-controller tests remain distinct from emulation.
-The 30-45-minute pacing target needs human playtesting; it is not a measured result.
+The new route meets the twenty-minute movement target. Difficulty and enjoyment
+over a full human playthrough still benefit from real-device playtesting.

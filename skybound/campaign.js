@@ -1,0 +1,147 @@
+// Authored room sequences. Coordinates are local pixels; rises are relative to
+// the area's floor. Required routes never depend on lifts or wind timing.
+const ROOM_WIDTH = 1024;
+const ROOMS = {
+  terraces: {
+    ground: [[0, 192, 0], [192, 160, 16], [352, 160, 48], [512, 160, 16], [672, 352, 0]],
+    ledges: [[368, 80, 80], [464, 112, 96], [576, 144, 112], [704, 112, 96], [816, 80, 80], [912, 48, 80]],
+    prize: [624, 144], encounters: [272, 784], flower: 944,
+  },
+  brook: {
+    ground: [[0, 304, 0], [352, 304, 0], [704, 320, 0]],
+    ledges: [[176, 32, 80], [272, 64, 80], [368, 96, 96], [480, 128, 112], [608, 96, 80], [704, 64, 80], [800, 32, 80]],
+    prize: [528, 128], encounters: [224, 816], flower: 944,
+  },
+  ridge: {
+    ground: [[0, 192, 0], [192, 160, 32], [352, 160, 64], [512, 160, 96], [672, 128, 64], [800, 128, 32], [928, 96, 0]],
+    ledges: [[368, 96, 80], [464, 128, 96], [576, 160, 112], [704, 128, 80]],
+    prize: [624, 160], encounters: [272, 736], flower: 968,
+  },
+  hollow: {
+    ground: [[0, 192, 0], [192, 192, -32], [384, 256, -64], [640, 192, -32], [832, 192, 0]],
+    ledges: [[192, 32, 96], [304, 64, 96], [416, 96, 112], [544, 64, 96], [656, 32, 96], [768, 0, 80]],
+    prize: [464, 96], encounters: [288, 736], flower: 944,
+  },
+  causeway: {
+    ground: [[0, 224, 0], [272, 176, 16], [496, 208, 16], [752, 272, 0]],
+    ledges: [[112, 32, 80], [208, 64, 96], [320, 96, 96], [432, 128, 112], [560, 96, 96], [672, 64, 96], [784, 32, 96]],
+    prize: [480, 128], encounters: [352, 848], flower: 968,
+  },
+  windwalk: {
+    ground: [[0, 1024, 0]],
+    ledges: [[176, 32, 80], [272, 64, 80], [368, 96, 80], [464, 128, 96], [656, 128, 96], [768, 96, 80], [864, 64, 80]],
+    lift: [560, 128, 80, { axis: 'x', distance: 80, speed: 22 }],
+    gust: [560, 144, 80, 144], prize: [704, 128], encounters: [288, 832], flower: 944,
+  },
+  saddle: {
+    ground: [[0, 224, 0], [224, 160, 32], [384, 192, 0], [576, 160, 32], [736, 288, 0]],
+    ledges: [[240, 64, 96], [352, 96, 96], [464, 128, 112], [592, 96, 96], [704, 64, 96], [816, 32, 80]],
+    prize: [512, 128], encounters: [304, 832], flower: 960,
+  },
+  skySteps: {
+    ground: [[0, 256, 0], [256, 192, 32], [448, 224, 64], [672, 192, 32], [864, 160, 0]],
+    ledges: [[272, 64, 80], [368, 96, 80], [464, 128, 96], [576, 160, 112], [704, 128, 80], [800, 96, 80], [896, 64, 96]],
+    gust: [592, 160, 48, 96], prize: [624, 160], encounters: [352, 768], flower: 960,
+  },
+};
+
+// Each chapter mixes a different route rhythm and enemy pairing. Mirrored
+// rooms provide descending approaches rather than repeating the same climbs.
+const CHAPTERS = {
+  meadow: [
+    ['Petal Outskirts', ['terraces', 'brook', 'saddle', 'hollow', 'ridge', 'windwalk', 'skySteps']],
+    ['Windmill Way', ['windwalk', 'saddle', 'terraces', 'causeway', 'skySteps', 'brook', 'hollow']],
+    ['Honeybank Hollow', ['hollow', 'brook', 'ridge', 'terraces', 'saddle', 'causeway', 'windwalk']],
+    ['Sunflower Heights', ['ridge', 'skySteps', 'windwalk', 'saddle', 'causeway', 'hollow', 'terraces']],
+    ['Bramble Crossing', ['causeway', 'terraces', 'hollow', 'ridge', 'brook', 'skySteps', 'saddle']],
+    ['Golden Approach', ['skySteps', 'windwalk', 'causeway', 'brook', 'terraces', 'ridge', 'hollow']],
+  ],
+  cliff: [
+    ['Windswept Pass', ['skySteps', 'ridge', 'hollow', 'causeway', 'windwalk', 'terraces', 'saddle']],
+    ['Echo Ravine', ['hollow', 'causeway', 'brook', 'ridge', 'saddle', 'windwalk', 'skySteps']],
+    ['Kitekeeper Trail', ['windwalk', 'terraces', 'skySteps', 'saddle', 'ridge', 'brook', 'causeway']],
+    ['Splitstone Peaks', ['ridge', 'saddle', 'causeway', 'skySteps', 'hollow', 'terraces', 'brook']],
+    ['Cloudbreak Crossing', ['brook', 'windwalk', 'skySteps', 'causeway', 'terraces', 'hollow', 'ridge']],
+    ['Galeweaver Ascent', ['terraces', 'ridge', 'windwalk', 'hollow', 'saddle', 'causeway', 'skySteps']],
+  ],
+  canopy: [
+    ['Fernroot Trail', ['terraces', 'hollow', 'saddle', 'ridge', 'brook', 'skySteps', 'windwalk']],
+    ['Lantern Grove', ['windwalk', 'skySteps', 'brook', 'terraces', 'causeway', 'saddle', 'hollow']],
+    ['Tangled Waterway', ['brook', 'causeway', 'hollow', 'windwalk', 'ridge', 'terraces', 'skySteps']],
+    ['Mothlight Boughs', ['skySteps', 'windwalk', 'ridge', 'saddle', 'hollow', 'brook', 'causeway']],
+    ['Thornroot Maze', ['saddle', 'ridge', 'terraces', 'hollow', 'causeway', 'skySteps', 'brook']],
+    ['Heartwood Trail', ['hollow', 'terraces', 'windwalk', 'causeway', 'skySteps', 'saddle', 'ridge']],
+  ],
+};
+const ENCOUNTERS = {
+  meadow: [['beetle', 'hopper'], ['hopper', 'beetle'], ['beetle', 'shellback'], ['hopper', 'bird'], ['shellback', 'hopper'], ['bird', 'beetle']],
+  cliff: [['shellback', 'moth'], ['hopper', 'shellback'], ['moth', 'beetle'], ['shellback', 'bird'], ['bird', 'hopper'], ['moth', 'shellback']],
+  canopy: [['plant', 'hopper'], ['bird', 'beetle'], ['shellback', 'plant'], ['moth', 'hopper'], ['plant', 'bird'], ['shellback', 'moth']],
+};
+
+export function extendLevel(original) {
+  if (!CHAPTERS[original.id]) return original;
+  const level = structuredClone(original);
+  const insertAt = level.terrain.at(-1).x;
+  const floor = level.terrain.at(-1).y;
+  const length = CHAPTERS[level.id].reduce((sum, [, rooms]) => sum + rooms.length * ROOM_WIDTH, 0);
+  for (const key of ['terrain', 'platforms', 'enemies', 'flowers', 'emblems', 'checkpoints', 'gusts']) {
+    for (const entry of level[key]) {
+      if (entry.x >= insertAt || entry.id?.endsWith('-boss') || entry.id?.endsWith('-boss-rest')) entry.x += length;
+    }
+  }
+  level.width += length;
+  level.boss.x += length;
+  level.boss.arena.x += length;
+  level.exit.x += length;
+  level.chapters = [{ id: `${level.id}-opening`, name: level.name, x: 0, endX: insertAt }];
+  let cursor = insertAt;
+  CHAPTERS[level.id].forEach(([name, roomNames], chapterIndex) => {
+    const chapterId = `${level.id}-chapter-${chapterIndex + 1}`;
+    level.chapters.push({ id: chapterId, name, x: cursor, endX: cursor + ROOM_WIDTH * roomNames.length });
+    roomNames.forEach((roomName, roomIndex) => {
+      const room = ROOMS[roomName];
+      const id = `${chapterId}-room-${roomIndex + 1}`;
+      const mirror = (chapterIndex + roomIndex) % 2 === 1;
+      const pointX = x => cursor + (mirror ? ROOM_WIDTH - x : x);
+      const rectX = (x, w) => cursor + (mirror ? ROOM_WIDTH - x - w : x);
+      const ground = room.ground.map(([x, w, rise]) => ({ x: rectX(x, w), y: floor - rise, w, h: level.height - floor + rise }));
+      level.terrain.push(...ground);
+      for (const [x, rise, w] of room.ledges) level.platforms.push({ x: rectX(x, w), y: floor - rise, w, h: 8, oneWay: true });
+      if (room.lift) {
+        const [x, rise, w, move] = room.lift;
+        level.platforms.push({ x: rectX(x, w) - (mirror ? move.distance : 0), y: floor - rise, w, h: 8, oneWay: true,
+          move: { ...move } });
+      }
+      if (room.gust) {
+        const [x, rise, w, h] = room.gust;
+        level.gusts.push({ x: rectX(x, w), y: floor - rise, w, h });
+      }
+      const surface = x => ground.find(rect => x >= rect.x && x < rect.x + rect.w)?.y;
+      room.encounters.forEach((localX, index) => {
+        const x = pointX(localX);
+        const type = ENCOUNTERS[level.id][(chapterIndex + roomIndex) % 6][index];
+        const flying = type === 'bird' || type === 'moth';
+        // Flying patrols sit above the highest ground in their whole lane.
+        const y = flying ? Math.min(...ground.filter(rect => rect.x < x + 96 && rect.x + rect.w > x - 96).map(rect => rect.y)) - 64 : surface(x);
+        level.enemies.push({ id: `${id}-enemy-${index}`, type, x, y, range: 32 });
+      });
+      // Healing follows the encounter on the required path in either direction.
+      const healingX = cursor + 960;
+      level.flowers.push({ id: `${id}-flower`, x: healingX, y: surface(healingX) });
+      level.emblems.push({ id: `${id}-emblem`, x: pointX(room.prize[0]), y: floor - room.prize[1] });
+      if ([0, 3, 6].includes(roomIndex)) {
+        const x = cursor + 80;
+        level.checkpoints.push({ id: `${id}-checkpoint`, name: `${name} ${Math.floor(roomIndex / 3) + 1}/3`, x, y: surface(x) });
+      }
+      cursor += ROOM_WIDTH;
+    });
+  });
+  level.chapters.push({ id: `${level.id}-boss`, name: level.boss.name, x: cursor, endX: level.width });
+  for (const key of ['terrain', 'platforms', 'enemies', 'flowers', 'emblems', 'checkpoints', 'gusts']) level[key].sort((a, b) => a.x - b.x);
+  return level;
+}
+
+export function chapterAt(level, x) {
+  return level.chapters?.find(chapter => x >= chapter.x && x < chapter.endX) || null;
+}

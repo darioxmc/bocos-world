@@ -2,7 +2,9 @@
 // Regular flying enemies start 56px above their supporting terrain.
 // Required routes use static terrain: rises <=32px, gaps <=48px.
 // Elevated one-way trails are optional and never required by boss progression.
-export const LEVELS = [
+import { extendLevel } from './campaign.js';
+
+const BASE_LEVELS = [
   {
     id: 'meadow',
     name: 'Sunpetal Meadow',
@@ -480,3 +482,5 @@ export const LEVELS = [
     exit: { x: 2000, y: 208 },
   },
 ];
+
+export const LEVELS = BASE_LEVELS.map(extendLevel);

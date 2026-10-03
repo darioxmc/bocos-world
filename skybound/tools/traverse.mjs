@@ -12,6 +12,7 @@ try {
   await page.goto('http://127.0.0.1:8770/',{waitUntil:'networkidle'});
   await page.waitForFunction(()=>window.skybound?.scene?.player);
   await page.evaluate(()=>{skybound.saves.create(0);skybound.saves.save(0,{area:3,defeated:['meadow','cliff','canopy']});});
+  let mainFrames=0;
   for(let area=0;area<4;area++) {
     if(area) {
       await page.reload({waitUntil:'networkidle'});
@@ -24,11 +25,11 @@ try {
       skybound.game.loop.stop();
       const s=skybound.scene,c=skybound.controls;
       s.invulnerableUntil=10000;
-      for(const enemy of s.enemies.getChildren())enemy.body.enable=false;
+      for(const enemy of s.enemies.getChildren()) { enemy.disableBody(true,true); s.enemyData.get(enemy).dead=true; }
       // Disable combat only: terrain and platform bodies remain the real Arcade bodies.
       let resets=0,jumps=0,stalled=0,lastX=s.player.x,holdUntil=-1;
       const target=s.level.boss.arena.x+24;
-      for(let frame=0;frame<9000;frame++) {
+      for(let frame=0;frame<60000;frame++) {
         const p=s.player,grounded=p.body.blocked.down||p.body.touching.down;
         const next=s.level.terrain.find(rect=>rect.x>p.x+2);
         const current=s.level.terrain.find(rect=>p.x>=rect.x&&p.x<rect.x+rect.w);
@@ -54,9 +55,12 @@ try {
       return{area:s.level.id,reached:false,reason:'timeout',jumps,resets,x:s.player.x,y:s.player.y};
     });
     console.log(JSON.stringify(route));
+    if(area<3)mainFrames+=route.frames;
     assert(route.reached,`${route.area} mandatory route is traversable`);
     assert.equal(route.resets,0,`${route.area} requires no fall recovery`);
   }
   assert.deepEqual(errors,[]);
+  assert(mainFrames/60>=1200, 'Main route should take at least twenty minutes at normal physics speed');
+  console.log(`Measured main-route movement: ${(mainFrames/3600).toFixed(2)} minutes, excluding combat and exploration.`);
   console.log('All four mandatory routes traversed using actual Arcade bodies.');
 } finally {await browser.close();}

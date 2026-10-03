@@ -141,11 +141,10 @@ try {
     skybound.scene.scene.restart({slot:0,area:0});
   });
   await page.waitForFunction(() => skybound.scene.areaIndex===0 && skybound.scene.mode==='playing');
-  await page.waitForTimeout(150);
-  const padStart=await page.evaluate(() => skybound.scene.player.x);
+  await page.waitForFunction(() => skybound.scene.player.body.blocked.down || skybound.scene.player.body.touching.down);
+  const padStart=await page.evaluate(() => ({x:skybound.scene.player.x,y:skybound.scene.player.y}));
   await page.evaluate(() => {testPad.axes[0]=1;testPad.buttons[0]={pressed:true,value:1};});
-  await page.waitForTimeout(200);
-  assert(await page.evaluate(start=>skybound.scene.player.x>start+10 && skybound.scene.player.y<190,padStart));
+  await page.waitForFunction(start=>skybound.scene.player.x>start.x+10 && skybound.scene.player.y<start.y-18,padStart,{timeout:5000});
   await page.evaluate(() => {testPad.axes[0]=0;testPad.buttons[0]={pressed:false,value:0};testPad.connected=false;});
   await page.waitForFunction(() => skybound.scene.mode==='paused');
   await page.getByRole('button',{name:'Resume',exact:true}).click();
