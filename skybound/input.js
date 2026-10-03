@@ -57,8 +57,18 @@ export class InputController {
     this.menu = document.body.classList.contains('menu-open');
     this.listen(window, 'keydown', event => this.keyDown(event));
     this.listen(window, 'keyup', event => this.keyUp(event));
-    this.listen(window, 'blur', () => this.suspend('focus-lost'));
-    this.listen(document, 'visibilitychange', () => { if (document.hidden) this.suspend('focus-lost'); });
+    this.listen(window, 'blur', () => {
+      // Mobile focus changes do not imply backgrounding. Preserve active touches
+      // while visible; visibilitychange/pagehide handle actual app departure.
+      if (document.hidden || !(this.touchQuery.matches || navigator.maxTouchPoints > 0)) this.suspend('focus-lost');
+      else {
+        this.releasePrefix('key:');
+        this.keys.clear();
+        this.blockedKeys.clear();
+      }
+    });
+    this.listen(document, 'visibilitychange', () => { if (document.hidden) this.suspend('page-hidden'); });
+    this.listen(window, 'pagehide', () => this.suspend('page-hidden'));
     this.listen(window, 'gamepaddisconnected', event => {
       this.pads.delete(event.gamepad.index);
       this.releasePrefix(`pad:${event.gamepad.index}:`);

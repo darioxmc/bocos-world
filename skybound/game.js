@@ -713,9 +713,7 @@ window.addEventListener('skybound:audio', () => {
   const updated = SaveStore.saveSettings({ muted: needsUnlock ? false : !settings.muted });
   window.dispatchEvent(new CustomEvent('skybound:settings', { detail: updated }));
 });
-document.addEventListener('visibilitychange', () => { if (document.hidden) scene()?.pause(); });
 window.addEventListener('pagehide', () => scene()?.flushSave());
-window.addEventListener('blur', () => scene()?.pause());
 
 // Inspection hooks are available in the local preview for browser verification.
 if (['localhost', '127.0.0.1'].includes(location.hostname)) {

@@ -76,6 +76,9 @@ wall, ledge, patrol-boundary, and offscreen suspension cases in Arcade physics.
 `node tools/verify-playtest.mjs` checks boss-charge jump clearance with combat
 enabled, boss contact between attacks, keyboard Settings navigation, and
 simultaneous browser touch contacts with independent release.
+`node tools/verify-mobile-pause.mjs` checks that visible mobile focus changes do
+not pause or cancel held touch controls, while backgrounding, page departure,
+manual Pause and desktop focus loss still pause safely.
 
 Browser checks cover keyboard movement, gliding, combat, boss vulnerability
 and gates, menu transitions, simulated gamepad inputs/disconnection, simultaneous
