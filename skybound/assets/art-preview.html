@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Skybound Art</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; background: #19252a; color: #e7ede2; font: 14px system-ui, sans-serif; }
+    main { max-width: 1080px; margin: auto; padding: 24px; }
+    h1 { font-size: 24px; margin: 0 0 20px; }
+    h2 { font-size: 17px; margin: 28px 0 14px; }
+    header, .controls { display: flex; flex-wrap: wrap; align-items: center; gap: 16px; }
+    header { justify-content: space-between; }
+    label { display: flex; align-items: center; gap: 8px; }
+    select { background: #31433d; color: #f4f1d8; border: 1px solid #7c9887; padding: 7px; font: inherit; }
+    input { accent-color: #d0c272; }
+    .controls { margin: 0 0 18px; }
+    #stage { width: 100%; max-width: 960px; aspect-ratio: 4 / 3; background: #243b3e; }
+    #stage canvas { display: block; width: 100% !important; height: 100% !important; image-rendering: pixelated; }
+    .sprites { display: flex; flex-wrap: wrap; gap: 20px 8px; }
+    figure { width: 112px; margin: 0; }
+    figure canvas { width: 96px; height: 96px; image-rendering: pixelated; object-fit: contain; }
+    figcaption { color: #b6c8bc; font: 12px monospace; overflow-wrap: anywhere; }
+    @media (max-width: 600px) { main { padding: 16px; } figure { width: 100px; } }
+  </style>
+</head>
+<body>
+  <main>
+    <header><h1>Skybound Art</h1><label>Area <select id="area">
+      <option value="meadow">Meadow</option><option value="cliff">Cliff</option>
+      <option value="canopy">Canopy</option><option value="roost">Roost</option>
+    </select></label></header>
+    <div class="controls">
+      <label><input id="auto" type="checkbox" checked>Auto Scroll</label>
+      <label>Camera <input id="camera" type="range" min="0" max="6180" value="0"></label>
+      <label>Pose <select id="pose"><option value="run">Run</option><option value="idle">Idle</option>
+        <option value="jump">Jump</option><option value="fall">Fall</option><option value="glide">Glide</option>
+        <option value="duck">Duck</option><option value="peck">Peck</option><option value="swipe">Swipe</option>
+        <option value="hurt">Hurt</option><option value="win">Win</option></select></label>
+    </div>
+    <div id="stage"></div>
+    <h2>Boco</h2><div class="sprites" id="boco"></div>
+    <h2>Creatures</h2><div class="sprites" id="creatures"></div>
+    <h2>Terrain &amp; Objects</h2><div class="sprites" id="terrain"></div>
+  </main>
+  <script src="../vendor/phaser.min.js"></script>
+  <script type="module">
+    import { createArt, createBackdrop } from '../art.js';
+    const area = document.querySelector('#area');
+    const auto = document.querySelector('#auto');
+    const camera = document.querySelector('#camera');
+    const pose = document.querySelector('#pose');
+    let previewScene;
+    class ArtScene extends Phaser.Scene {
+      create() {
+        previewScene = this;
+        createArt(this);
+        this.cameras.main.setBounds(0, 0, 6500, 240);
+        this.cameras.main.roundPixels = true;
+        this.backdrop = createBackdrop(this, area.value, 6500, 240);
+        this.floor = this.add.tileSprite(0, 208, 320, 16, 'meadow-ground').setOrigin(0).setScrollFactor(0);
+        this.fill = this.add.tileSprite(0, 224, 320, 16, 'meadow-fill').setOrigin(0).setScrollFactor(0);
+        this.hero = this.add.sprite(76, 208, 'boco-idle').setOrigin(0.5, 1).setScrollFactor(0);
+        this.enemy = this.add.image(177, 208, 'beetle').setOrigin(0.5, 1).setScrollFactor(0);
+        this.boss = this.add.image(262, 208, 'boss-beetle').setOrigin(0.5, 1).setScrollFactor(0);
+        this.add.image(122, 208, 'flower').setOrigin(0.5, 1).setScrollFactor(0);
+        this.add.image(34, 208, 'checkpoint').setOrigin(0.5, 1).setScrollFactor(0);
+        this.elapsed = 0;
+        const groups = { boco: [], creatures: [], terrain: [] };
+        const standalone = ['beetle', 'shellback', 'hopper', 'plant', 'bird', 'moth',
+          'seed', 'flower', 'emblem', 'checkpoint', 'exit', 'gust', 'platform'];
+        for (const key of this.textures.getTextureKeys().filter(k =>
+          k.startsWith('boco-') || k.startsWith('boss-') || k.endsWith('-ground') ||
+          k.endsWith('-fill') || standalone.includes(k))) {
+          groups[key.startsWith('boco-') ? 'boco' :
+            key.startsWith('boss-') || ['beetle', 'shellback', 'hopper', 'plant', 'bird', 'moth'].includes(key)
+              ? 'creatures' : 'terrain'].push(key);
+        }
+        for (const [id, keys] of Object.entries(groups)) {
+          for (const key of keys) {
+            const figure = document.createElement('figure');
+            const canvas = document.createElement('canvas');
+            canvas.width = 96; canvas.height = 96;
+            const ctx = canvas.getContext('2d'); ctx.imageSmoothingEnabled = false;
+            const source = this.textures.get(key).getSourceImage();
+            const scale = Math.min(source.width > 32 ? 1 : 4,
+              Math.floor(96 / Math.max(source.width, source.height)));
+            const w = source.width * scale;
+            const h = source.height * scale;
+            ctx.drawImage(source, Math.floor((96 - w) / 2), Math.max(0, 96 - h), w, h);
+            const caption = document.createElement('figcaption'); caption.textContent = key;
+            figure.append(canvas, caption); document.getElementById(id).append(figure);
+          }
+        }
+        this.events.once('shutdown', () => this.backdrop.destroy());
+        window.artPreview = { scene: this, ready: true };
+      }
+      setArea(key) {
+        this.backdrop.destroy(); this.backdrop = createBackdrop(this, key, 6500, 240);
+        this.floor.setTexture(`${key}-ground`); this.fill.setTexture(`${key}-fill`);
+        const enemy = { meadow: 'beetle', cliff: 'moth', canopy: 'plant', roost: 'bird' }[key];
+        this.enemy.setTexture(enemy); this.boss.setTexture(`boss-${enemy}`);
+      }
+      update(time, delta) {
+        this.elapsed += delta;
+        if (auto.checked) camera.value = (Number(camera.value) + delta * 0.08) % 6180;
+        this.cameras.main.scrollX = Number(camera.value);
+        this.backdrop.update(this.cameras.main, time);
+        this.floor.tilePositionX = this.fill.tilePositionX = Number(camera.value);
+        const choice = pose.value;
+        const frame = choice === 'run' ? `run${Math.floor(this.elapsed / 100) % 6}` :
+          choice === 'glide' ? `glide${Math.floor(this.elapsed / 200) % 2}` : choice;
+        this.hero.setTexture(`boco-${frame}`);
+      }
+    }
+    area.addEventListener('change', () => previewScene?.setArea(area.value));
+    camera.addEventListener('input', () => { auto.checked = false; });
+    new Phaser.Game({ type: Phaser.CANVAS, width: 320, height: 240, parent: 'stage',
+      pixelArt: true, roundPixels: true, antialias: false, banner: false,
+      scene: ArtScene, audio: { noAudio: true } });
+  </script>
+</body>
+</html>
