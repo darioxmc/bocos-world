@@ -18,6 +18,10 @@ Three handcrafted areas, six ordinary enemy types, an area boss in each, and
 an unlockable fourth area and final encounter. Jump, peck, stomp, glide, ride
 moving platforms, collect flower emblems, and restore the gardens. Flowers
 heal without granting invulnerability. Damage turns Boco's white center red.
+Healing flowers remain available when health is full. The separately labeled
+Emblems counter tracks collectible flower emblems, not another health slot.
+Attacks animate Boco's whole head; actual enemy damage uses Canvas-compatible
+sprite flashes, including on bosses, without adding particles or changing reach.
 Checkpoints and unlimited retries keep the game approachable.
 
 The main campaign includes eighteen additional named chapters, assembled from
@@ -82,6 +86,9 @@ manual Pause and desktop focus loss still pause safely.
 `node tools/verify-touch-zoom.mjs` checks rapid taps on controls and surrounding
 gaps in phone landscape/portrait, viewport scale, independent multi-touch
 release, and preservation of native menu gestures.
+`node tools/verify-combat-feedback.mjs` checks actual damage versus armor blocks,
+hit/death/boss flashes, attack poses and collision dimensions, flower pickup
+rules, and the separated health/emblem HUD on phone viewports.
 
 Browser checks cover keyboard movement, gliding, combat, boss vulnerability
 and gates, menu transitions, simulated gamepad inputs/disconnection, simultaneous

@@ -34,6 +34,7 @@ class Play extends Phaser.Scene {
     this.invulnerableUntil = 0;
     this.hurtUntil = 0;
     this.attackUntil = 0;
+    this.attackAnimationUntil = 0;
     this.attackReady = 0;
     this.coyoteUntil = 0;
     this.jumpBufferedUntil = 0;
@@ -343,6 +344,7 @@ class Play extends Phaser.Scene {
     }
     if (controls.pressed('attack') && this.clock >= this.attackReady && this.clock >= this.hurtUntil) {
       this.attackUntil = this.clock + 0.14;
+      this.attackAnimationUntil = this.clock + 0.3;
       this.attackReady = this.clock + 0.3;
       this.attackVictims.clear();
       audio.effect('peck');
@@ -355,7 +357,11 @@ class Play extends Phaser.Scene {
     const grounded = body.blocked.down || body.touching.down;
     let key = 'boco-idle';
     if (this.clock < this.hurtUntil) key = 'boco-hurt';
-    else if (this.clock < this.attackUntil) key = grounded ? 'boco-peck' : 'boco-swipe';
+    else if (this.clock < this.attackAnimationUntil) {
+      const elapsed = 0.3 - (this.attackAnimationUntil - this.clock);
+      const frame = elapsed < 0.05 ? 0 : elapsed < 0.14 ? 1 : elapsed < 0.23 ? 2 : 3;
+      key = `boco-${grounded ? 'peck' : 'swipe'}${frame}`;
+    }
     else if (this.gliding) key = `boco-glide${Math.floor(this.clock * 6) % 2}`;
     else if (!grounded) key = body.velocity.y < 0 ? 'boco-jump' : 'boco-fall';
     else if (controls.down('down')) key = 'boco-duck';
@@ -427,7 +433,8 @@ class Play extends Phaser.Scene {
       }
       const frame = Math.floor(this.clock * (enemy.getData('flying') ? 10 : 8)) % 4;
       const texture = `${state.type}-${enemy.getData('flying') ? 'flap' : 'run'}${frame}`;
-      if (this.textures.exists(texture)) enemy.setTexture(texture);
+      const baseTexture = this.textures.exists(texture) ? texture : state.type;
+      enemy.setTexture(this.clock < (state.hitUntil || 0) ? `${baseTexture}-hit` : baseTexture);
       enemy.setFlipX(state.dir < 0);
     }
   }
@@ -448,8 +455,9 @@ class Play extends Phaser.Scene {
     if (!state || state.dead) return;
     state.dead = true;
     enemy.body.enable = false;
+    enemy.setTexture(`${state.type}-hit`).clearTint();
     audio.effect('peck');
-    this.tweens.add({ targets: enemy, y: enemy.y + 25, angle: this.facing * 60, alpha: 0, duration: 260, onComplete: () => { this.enemyData.delete(enemy); enemy.destroy(); } });
+    this.tweens.add({ targets: enemy, y: enemy.y + 25, angle: this.facing * 60, alpha: 0, delay: 80, duration: 260, onComplete: () => { this.enemyData.delete(enemy); enemy.destroy(); } });
   }
 
   updateAttack() {
@@ -464,7 +472,7 @@ class Play extends Phaser.Scene {
       }
       state.hp--;
       if (state.hp <= 0) this.killEnemy(enemy);
-      else { enemy.setTint(0xffffff); state.dir *= -1; }
+      else { state.hitUntil = this.clock + 0.24; enemy.setTexture(`${state.type}-hit`).clearTint(); state.dir *= -1; audio.effect('hit'); }
     }
     for (const seed of this.seeds.getChildren()) if (overlaps(attack, bodyRect(seed))) seed.destroy();
     if (this.boss?.active && !this.bossDefeated && overlaps(attack, bodyRect(this.boss))) this.hitBoss();
@@ -498,6 +506,8 @@ class Play extends Phaser.Scene {
 
   respawn() {
     this.deathUntil = 0;
+    this.attackUntil = 0;
+    this.attackAnimationUntil = 0;
     this.health = this.maxHealth;
     this.player.body.enable = true;
     this.player.body.reset(this.checkpoint.x, this.checkpoint.y);
@@ -514,9 +524,9 @@ class Play extends Phaser.Scene {
     this.seeds.clear(true, true);
     if (this.bossEngaged && !this.bossDefeated) {
       this.bossEngaged = false;
-      Object.assign(this.bossState, { hp: 6, phase: 'sleep', until: 0, hitUntil: 0, volley: 0 });
+      Object.assign(this.bossState, { hp: 6, phase: 'sleep', until: 0, hitUntil: 0, flashUntil: 0, volley: 0 });
       this.boss.body.reset(this.level.boss.x, this.level.boss.y);
-      this.boss.clearTint().setAlpha(1);
+      this.boss.setTexture(`boss-${this.level.boss.type}`).clearTint().setAlpha(1);
       this.boss.setVelocity(0, 0);
       for (const ledge of this.bossPlatforms) { ledge.setVisible(false); ledge.body.enable = false; }
       this.cameras.main.setBounds(0, 0, this.level.width, this.level.height);
@@ -599,6 +609,7 @@ class Play extends Phaser.Scene {
     if (boss.x < minX || boss.x > maxX) { boss.x = Math.max(minX, Math.min(maxX, boss.x)); boss.body.updateFromGameObject(); }
     if (boss.y > spec.y) { boss.y = spec.y; boss.body.updateFromGameObject(); }
     boss.setFlipX(state.facing < 0);
+    boss.setTexture(`boss-${spec.type}${this.clock < (state.flashUntil || 0) ? '-hit' : ''}`);
     boss.setAlpha(this.clock < state.hitUntil && Math.floor(this.clock * 12) % 2 ? 0.5 : 1);
   }
 
@@ -624,6 +635,8 @@ class Play extends Phaser.Scene {
     const state = this.bossState;
     if (!this.bossEngaged || this.bossDefeated || state.phase !== 'recover' || this.clock < state.hitUntil) return;
     state.hitUntil = this.clock + 0.7;
+    state.flashUntil = this.clock + 0.24;
+    this.boss.setTexture(`boss-${this.level.boss.type}-hit`).clearTint();
     state.hp--;
     audio.effect('hit');
     if (state.hp > 0) return;

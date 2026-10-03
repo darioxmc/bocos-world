@@ -94,12 +94,16 @@ function bocoWing(ctx, pose, bob) {
 
 function boco(ctx, pose) {
   const p = BOCO;
+  const attack = /^(peck|swipe)([0-3])?$/.exec(pose);
+  const attackFrame = attack ? Number(attack[2] ?? 1) : -1;
+  const basePose = attack ? attack[1] : pose;
   const run = pose.startsWith('run') ? Number(pose.slice(3)) : -1;
   const duck = pose === 'duck';
-  const airborne = ['jump', 'fall', 'glide0', 'glide1', 'swipe'].includes(pose);
+  const airborne = ['jump', 'fall', 'glide0', 'glide1', 'swipe'].includes(basePose);
   const bob = run >= 0 ? [0, -1, 0, 0, -1, 0][run] : 0;
-  const headY = duck ? 12 : 4 + bob;
-  const headX = pose === 'peck' ? 3 : duck ? 2 : 0;
+  const headY = attack ? [4, 7, 6, 4][attackFrame] : duck ? 12 : 4 + bob;
+  const headX = attack ? [-3, 1, 0, -1][attackFrame] : duck ? 2 : 0;
+  const headAngle = attack ? [-0.45, 0.65, 0.35, -0.12][attackFrame] : 0;
   const bodyY = duck ? 5 : bob;
   const cream = pose === 'hurt' ? '#ee645c' : p.cream;
   const creamShade = pose === 'hurt' ? '#b7384e' : p.creamShade;
@@ -161,20 +165,25 @@ function boco(ctx, pose) {
   // A smaller head, swept three-feather crest and hooked beak make a runner silhouette.
   ctx.save();
   ctx.translate(headX, headY);
-  polygon(ctx, p.edge, [[13, 4], [9, 0], [13, 0], [12, -2], [17, 0],
+  // Rotate the whole head on the pixel grid, without antialiased canvas rotation.
+  const headPoint = ([x, y]) => [Math.round(19 + (x - 19) * Math.cos(headAngle) - (y - 9) * Math.sin(headAngle)), Math.round(9 + (x - 19) * Math.sin(headAngle) + (y - 9) * Math.cos(headAngle))];
+  const headPolygon = (color, points) => polygon(ctx, color, points.map(headPoint));
+  const headRect = (color, x, y, w = 1, h = 1) => headPolygon(color, [[x, y], [x + w, y], [x + w, y + h], [x, y + h]]);
+  headPolygon(p.edge, [[13, 4], [9, 0], [13, 0], [12, -2], [17, 0],
     [18, -3], [20, 0], [23, 1], [25, 4], [25, 8], [22, 11], [17, 10], [14, 8]]);
-  polygon(ctx, p.gold, [[14, 4], [12, 1], [16, 2], [14, 0], [18, 2],
+  headPolygon(p.gold, [[14, 4], [12, 1], [16, 2], [14, 0], [18, 2],
     [18, -1], [20, 2], [23, 2], [24, 4], [24, 8], [21, 10], [17, 9], [15, 7]]);
-  polygon(ctx, p.light, [[15, 3], [18, 3], [20, 2], [23, 3], [23, 4],
+  headPolygon(p.light, [[15, 3], [18, 3], [20, 2], [23, 3], [23, 4],
     [18, 5], [16, 6]]);
-  rect(ctx, p.shade, 16, 8, 3, 1);
-  rect(ctx, cream, 21, 5, 3, 3);
-  rect(ctx, p.ink, 22, 5, 2, 3);
-  rect(ctx, '#ffffff', 22, 5);
-  rect(ctx, p.edge, 21, 4, 3, 1);
-  polygon(ctx, p.edge, [[24, 6], [28, 6], [31 - headX, 8], [29 - headX, 11], [27 - headX, 9], [24, 9]]);
-  polygon(ctx, '#f5c877', [[25, 7], [28, 7], [30 - headX, 8], [28 - headX, 9], [25, 8]]);
-  rect(ctx, '#aa683a', 25, 9, Math.max(1, 4 - headX), 1);
+  headRect(p.shade, 16, 8, 3, 1);
+  headRect(cream, 21, 5, 3, 3);
+  headRect(p.ink, 22, 5, 2, 3);
+  headRect('#ffffff', 22, 5);
+  headRect(p.edge, 21, 4, 3, 1);
+  const beakInset = attack ? 0 : headX;
+  headPolygon(p.edge, [[24, 6], [28, 6], [31 - beakInset, 8], [29 - beakInset, 11], [27 - beakInset, 9], [24, 9]]);
+  headPolygon('#f5c877', [[25, 7], [28, 7], [30 - beakInset, 8], [28 - beakInset, 9], [25, 8]]);
+  headRect('#aa683a', 25, 9, Math.max(1, 4 - beakInset), 1);
   if (pose === 'hurt') {
     rect(ctx, p.gold, 21, 5, 3, 3);
     matrix(ctx, ['K.K', '.K.', 'K.K'], { K: p.ink }, 21, 5);
@@ -193,7 +202,23 @@ function boco(ctx, pose) {
     [frontX + 3, frontY - 4], [frontX, frontY - 4]]);
   rect(ctx, '#dca147', frontX + 1, 25 + bodyY, 2, Math.max(1, frontY - 28 - bodyY));
   bocoBoot(ctx, frontX, frontY);
-  bocoWing(ctx, duck ? 'idle' : pose, bodyY);
+  bocoWing(ctx, duck ? 'idle' : basePose, bodyY);
+}
+
+function hitTexture(scene, key) {
+  const source = scene.textures.get(key).getSourceImage();
+  texture(scene, `${key}-hit`, source.width, source.height, ctx => {
+    ctx.drawImage(source, 0, 0);
+    const pixels = ctx.getImageData(0, 0, source.width, source.height);
+    for (let i = 0; i < pixels.data.length; i += 4) {
+      if (!pixels.data[i + 3]) continue;
+      const dark = pixels.data[i] + pixels.data[i + 1] + pixels.data[i + 2] < 210;
+      pixels.data[i] = dark ? 151 : 255;
+      pixels.data[i + 1] = dark ? 45 : 241;
+      pixels.data[i + 2] = dark ? 65 : 214;
+    }
+    ctx.putImageData(pixels, 0, 0);
+  });
 }
 
 function beetle(ctx, shellback = false, frame = -1) {
@@ -639,7 +664,8 @@ function groundTile(ctx, theme, top) {
 /** Generate the complete shared texture set; safe to call on scene restart. */
 export function createArt(scene) {
   for (const pose of ['idle', 'run0', 'run1', 'run2', 'run3', 'run4', 'run5',
-    'jump', 'fall', 'glide0', 'glide1', 'duck', 'peck', 'swipe', 'hurt', 'win']) {
+    'jump', 'fall', 'glide0', 'glide1', 'duck', 'peck', 'swipe', 'hurt', 'win',
+    'peck0', 'peck1', 'peck2', 'peck3', 'swipe0', 'swipe1', 'swipe2', 'swipe3']) {
     texture(scene, `boco-${pose}`, 32, 32, ctx => boco(ctx, pose));
   }
   const enemies = { beetle: ctx => beetle(ctx), shellback: ctx => beetle(ctx, true), hopper, plant, bird, moth };
@@ -654,6 +680,9 @@ export function createArt(scene) {
   }
   for (const [key, paint] of Object.entries({ beetle: bossBeetle, moth: bossMoth, plant: bossPlant, bird: bossBird })) {
     texture(scene, `boss-${key}`, 64, 64, paint);
+  }
+  for (const key of scene.textures.getTextureKeys()) {
+    if (/^(beetle|shellback|hopper|plant|bird|moth)(-(run|flap)\d)?$|^boss-(beetle|moth|plant|bird)$/.test(key)) hitTexture(scene, key);
   }
   objects(scene);
   for (const key of Object.keys(TERRAIN)) {

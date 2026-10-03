@@ -67,7 +67,7 @@ select { background:#203d30; color:var(--ink); border:1px solid var(--line); bor
 .health-flower::before { content:''; position:absolute; left:5px; top:5px; width:4px; height:4px; border-radius:50%; background:#f6c5b7; box-shadow:0 -4px #f6c5b7, 4px -1px #f6c5b7, 2px 4px #f6c5b7, -3px 3px #f6c5b7, -4px -2px #f6c5b7; }
 .health-flower::after { content:''; position:absolute; left:5px; top:5px; width:4px; height:4px; border-radius:50%; background:var(--gold); }
 .health-flower.empty { opacity:.32; filter:grayscale(1); }
-#hud-emblems { color:var(--gold); white-space:nowrap; flex:none; }
+#hud-emblems { color:var(--gold); white-space:nowrap; flex:none; border-left:1px solid #afc0ae80; padding-left:7px; margin-left:2px; font-size:9px; }
 .hud button { pointer-events:auto; background:#0b211acc; border-color:#75927b; flex:none; display:grid; place-items:center; }
 .hud button svg { display:block; width:20px; height:20px; }
 .boss-bar { width:58%; margin:4px auto; background:#0b211acc; padding:4px 6px; font-size:10px; }

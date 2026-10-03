@@ -110,7 +110,8 @@
         this.floor.tilePositionX = this.fill.tilePositionX = Number(camera.value);
         const choice = pose.value;
         const frame = choice === 'run' ? `run${Math.floor(this.elapsed / 100) % 6}` :
-          choice === 'glide' ? `glide${Math.floor(this.elapsed / 200) % 2}` : choice;
+          choice === 'glide' ? `glide${Math.floor(this.elapsed / 200) % 2}` :
+          ['peck', 'swipe'].includes(choice) ? `${choice}${Math.floor(this.elapsed / 75) % 4}` : choice;
         this.hero.setTexture(`boco-${frame}`);
       }
     }

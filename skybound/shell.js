@@ -498,7 +498,11 @@ export class Shell {
       flowers.dataset.health = `${current}/${maximum}`;
     }
     flowers.setAttribute('aria-label', `Health ${current} of ${maximum}`);
-    document.getElementById('hud-emblems').textContent = `★ ${Array.isArray(emblems) ? emblems.length : emblems ?? 0}`;
+    const emblemCount = Array.isArray(emblems) ? emblems.length : emblems ?? 0;
+    const emblemCounter = document.getElementById('hud-emblems');
+    emblemCounter.textContent = `Emblems ${emblemCount}`;
+    emblemCounter.setAttribute('aria-label', `${emblemCount} flower emblems collected`);
+    emblemCounter.title = 'Flower emblems collected';
     const boss = document.getElementById('hud-boss');
     boss.hidden = !bossName || !(bossMax > 0);
     document.getElementById('hud-boss-name').textContent = bossName || '';

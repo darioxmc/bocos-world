@@ -1,0 +1,87 @@
+import { createRequire } from 'node:module';
+import path from 'node:path';
+import assert from 'node:assert/strict';
+import { mkdir, writeFile } from 'node:fs/promises';
+const runtime = process.env.SKYBOUND_DEPENDENCIES || 'C:/Users/dario/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules';
+const { chromium } = createRequire(import.meta.url)(path.join(runtime, 'playwright'));
+const browser = await chromium.launch({ headless: true, channel: 'msedge' });
+const errors = [];
+await mkdir('qa/combat-feedback', { recursive: true });
+try {
+  const page = await browser.newPage({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
+  page.on('pageerror', error => errors.push(error.message));
+  await page.goto('http://127.0.0.1:8770/', { waitUntil: 'networkidle' });
+  await page.waitForFunction(() => window.skybound?.scene?.player);
+  await page.evaluate(() => { skybound.saves.create(0); skybound.saves.save(0, { area: 1 }); skybound.scene.scene.restart({ slot: 0, area: 1 }); });
+  await page.waitForFunction(() => skybound.scene.areaIndex === 1 && skybound.scene.mode === 'playing');
+  const result = await page.evaluate(() => {
+    skybound.game.loop.stop();
+    const s = skybound.scene;
+    const enemy = [...s.enemyData.keys()].find(e => s.enemyData.get(e).type === 'shellback');
+    const state = s.enemyData.get(enemy);
+    state.dir = -1;
+    s.player.body.reset(enemy.x - 20, enemy.y); s.facing = 1;
+    s.attackUntil = s.clock + .14; s.attackVictims.clear();
+    s.updateAttack();
+    const damaged = { hp: state.hp, texture: enemy.texture.key };
+    s.updateAttack();
+    const singleHit = state.hp === 1;
+    s.clock += .25; s.updateEnemies(1 / 60);
+    const cleared = !enemy.texture.key.endsWith('-hit');
+    state.dir = -1;
+    s.player.body.reset(enemy.x + 20, enemy.y); s.facing = -1;
+    s.attackUntil = s.clock + .14; s.attackVictims.clear(); s.updateAttack();
+    const blocked = state.hp === 1 && !enemy.texture.key.endsWith('-hit');
+    s.player.body.reset(enemy.x - 20, enemy.y); s.facing = 1;
+    s.attackVictims.clear(); s.updateAttack();
+    const defeated = state.dead && !enemy.body.enable && enemy.texture.key.endsWith('-hit');
+    s.bossEngaged = true; s.bossState.phase = 'recover'; s.bossState.until = s.clock + 2;
+    s.hitBoss();
+    const bossHit = s.bossState.hp === 5 && s.boss.texture.key.endsWith('-hit');
+    s.respawn();
+    const reset = !s.boss.texture.key.endsWith('-hit') && s.attackAnimationUntil === 0;
+    const flower = s.pickups.getChildren().find(p => p.getData('kind') === 'flower');
+    s.health = s.maxHealth; s.pickup(flower);
+    const fullLeavesFlower = flower.active;
+    s.health--; s.invulnerableUntil = 0; s.pickup(flower);
+    const heals = s.health === s.maxHealth && !flower.active && s.invulnerableUntil === 0;
+    const emblem = s.pickups.getChildren().find(p => p.getData('kind') === 'emblem');
+    s.pickup(emblem); s.refreshHud();
+    const hud = { healthSlots: document.querySelector('#hud-health').children.length, label: document.querySelector('#hud-emblems').textContent };
+    s.player.body.blocked.down = true; s.hurtUntil = 0;
+    const animation = [];
+    const shape = () => [s.player.body.width, s.player.body.height, s.player.body.offset.x, s.player.body.offset.y];
+    const initialShape = shape();
+    const start = s.clock; s.attackAnimationUntil = start + .3;
+    for (const elapsed of [0, .06, .16, .25]) { s.clock = start + elapsed; s.animatePlayer(); animation.push({ key: s.player.texture.key, shape: shape() }); }
+    const canvas = document.createElement('canvas'); canvas.width = 320; canvas.height = 128;
+    const ctx = canvas.getContext('2d'); ctx.imageSmoothingEnabled = false;
+    ctx.fillStyle = '#80d8d1'; ctx.fillRect(0, 0, 320, 128);
+    const poses = ['idle', 'peck0', 'peck1', 'peck2', 'peck3', 'idle', 'swipe0', 'swipe1', 'swipe2', 'swipe3'];
+    const hashes = [];
+    poses.forEach((pose, i) => { const source = s.textures.get(`boco-${pose}`).getSourceImage(); ctx.drawImage(source, (i % 5) * 64, Math.floor(i / 5) * 64, 64, 64); hashes.push(source.toDataURL()); });
+    const hitPixels = s.textures.get('shellback-hit').getSourceImage().getContext('2d').getImageData(0, 0, 32, 32).data;
+    let palePixels = 0;
+    for (let i = 0; i < hitPixels.length; i += 4) if (hitPixels[i] === 255 && hitPixels[i + 1] === 241 && hitPixels[i + 3] > 0) palePixels++;
+    return { damaged, singleHit, cleared, blocked, defeated, bossHit, reset, fullLeavesFlower, heals, hud, animation, initialShape,
+      distinctGround: new Set(hashes.slice(1, 5)).size, distinctAir: new Set(hashes.slice(6)).size, palePixels, atlas: canvas.toDataURL() };
+  });
+  assert.equal(result.damaged.hp, 1); assert(result.damaged.texture.endsWith('-hit'));
+  for (const key of ['singleHit', 'cleared', 'blocked', 'defeated', 'bossHit', 'reset', 'fullLeavesFlower', 'heals']) assert(result[key], key);
+  assert.equal(result.hud.healthSlots, 3); assert.equal(result.hud.label, 'Emblems 1');
+  assert.deepEqual(result.animation.map(a => a.key), ['boco-peck0', 'boco-peck1', 'boco-peck2', 'boco-peck3']);
+  for (const frame of result.animation) assert.deepEqual(frame.shape, result.initialShape);
+  assert.equal(result.distinctGround, 4); assert.equal(result.distinctAir, 4); assert(result.palePixels > 100);
+  await writeFile('qa/combat-feedback/attack-atlas.png', Buffer.from(result.atlas.split(',')[1], 'base64'));
+  await page.reload({ waitUntil: 'networkidle' });
+  await page.waitForFunction(() => window.skybound?.scene?.player);
+  await page.evaluate(() => skybound.scene.scene.restart({ slot: 0, area: 0 }));
+  await page.waitForFunction(() => skybound.scene.mode === 'playing');
+  for (const [width, height] of [[390, 844], [844, 390], [667, 375]]) {
+    await page.setViewportSize({ width, height }); await page.waitForTimeout(120);
+    assert(await page.evaluate(() => [...document.querySelectorAll('#hud-health, #hud-emblems, #sound-button, #pause-button')].every(e => { const r = e.getBoundingClientRect(); return r.x >= 0 && r.right <= innerWidth; })), 'HUD fits');
+    await page.screenshot({ path: `qa/combat-feedback/${width}x${height}.png` });
+  }
+  assert.deepEqual(errors, []);
+  console.log('Combat feedback passed: damage vs armor, death/boss flash, reset, flower rules, labeled counter, four attack frames and unchanged body.');
+} finally { await browser.close(); }
