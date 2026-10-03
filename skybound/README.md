@@ -79,6 +79,9 @@ simultaneous browser touch contacts with independent release.
 `node tools/verify-mobile-pause.mjs` checks that visible mobile focus changes do
 not pause or cancel held touch controls, while backgrounding, page departure,
 manual Pause and desktop focus loss still pause safely.
+`node tools/verify-touch-zoom.mjs` checks rapid taps on controls and surrounding
+gaps in phone landscape/portrait, viewport scale, independent multi-touch
+release, and preservation of native menu gestures.
 
 Browser checks cover keyboard movement, gliding, combat, boss vulnerability
 and gates, menu transitions, simulated gamepad inputs/disconnection, simultaneous

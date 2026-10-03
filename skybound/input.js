@@ -88,6 +88,14 @@ export class InputController {
       this.clear();
     });
     this.listen(this.touchQuery, 'change', () => this.touchVisibility());
+    const touchControls = document.getElementById('touch-controls');
+    if (touchControls) {
+      // Keep rapid taps in buttons, labels and gaps from becoming browser zoom.
+      // Pointer events still own gameplay; menus retain native touch behavior.
+      const preventControlGesture = event => { if (!this.menu && event.cancelable) event.preventDefault(); };
+      this.listen(touchControls, 'touchend', preventControlGesture, { passive: false });
+      this.listen(touchControls, 'dblclick', preventControlGesture);
+    }
     const dpad = document.getElementById('dpad');
     if (dpad) {
       this.listen(dpad, 'pointerdown', event => this.touchStart(event, dpad, 'dpad'));
@@ -116,9 +124,9 @@ export class InputController {
     return this;
   }
 
-  listen(target, type, callback) {
-    target.addEventListener(type, callback);
-    this.listeners.push(() => target.removeEventListener(type, callback));
+  listen(target, type, callback, options) {
+    target.addEventListener(type, callback, options);
+    this.listeners.push(() => target.removeEventListener(type, callback, options));
   }
 
   applySettings(settings) {

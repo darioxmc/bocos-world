@@ -11,7 +11,8 @@ button.primary { background:var(--gold); color:#15291e; border-color:var(--gold)
 button.danger { color:#ffb4a5; border-color:#9a6658; }
 button.icon-button { padding:3px; width:30px; min-height:26px; font-size:16px; }
 [hidden] { display:none !important; }
-.console { width:100%; height:100%; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:12px; }
+.console { width:100%; height:100%; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:12px; touch-action:manipulation; }
+.touch-controls, .control-left, .control-right { touch-action:none; -webkit-touch-callout:none; }
 .screen { position:relative; width:min(100%, calc(var(--available-height) * 4 / 3), 960px); aspect-ratio:4/3; flex:none; overflow:hidden; background:#182e23; border:2px solid #6a8770; box-shadow:0 0 0 4px #101e18, 0 14px 45px #0008; isolation:isolate; }
 #game-mount { position:absolute; inset:0; }
 #game-mount canvas { display:block; width:100% !important; height:100% !important; image-rendering:pixelated; }
