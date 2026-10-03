@@ -47,131 +47,153 @@ function texture(scene, key, width, height, paint) {
   tex.setFilter(globalThis.Phaser?.Textures?.FilterMode?.NEAREST ?? 1);
 }
 
-const BOCO_PALETTE = {
-  o: '#795626', Y: '#f4cf32', L: '#fff28b', S: '#dca72b',
-  W: '#fffdef', I: '#dddcc8', K: '#292833', E: '#ffffff',
-  B: '#f6c052', b: '#b68032'
+const BOCO = {
+  edge: '#543d32', gold: '#edb832', light: '#ffe776', shade: '#bf792b',
+  cream: '#fff4cc', creamShade: '#dfc887', ink: '#252f39',
+  teal: '#267c80', tealLight: '#65b7ae', tealDark: '#194955',
+  red: '#c94751', redLight: '#ff8972', redDark: '#7f3446'
 };
 
-// The large white center, feather crown, long beak and splayed feet echo Boco7.
-const BOCO_BODY = [
-  '...............oo.oo.........',
-  '..............oLYoLYo........',
-  '.............oLYYYYYYo.......',
-  '............oLYLLLYYYSo......',
-  '...........oLYWWWWWWYYo......',
-  '...oo.....oLYWWWWWWWWYYo.....',
-  '..oLYo...oLYWWWWWEEWWWYo.....',
-  '..oLYYo.oLYWWWWWWEKWWWYooooo.',
-  '.oLYWWYoLYWWWWWWWEKWWWYBBBBbo',
-  '.oYWWWWYYWWWWWWWWWWWWWYBBBbo.',
-  'oLYWWWWWWWWWWWWWWWWWWWYBboo..',
-  'oYWWWWWWWWWWWWWWWWWWWYYoo....',
-  'oYWWWWWWWWWWWWWWWWWWWYo......',
-  '.oYWWWWWWWWWWWWWWWWWYSo......',
-  '.oYWWWWWWWWWWWWWWWWWYSo......',
-  '..oYWWWWWWWWWWWWWWWWYSo......',
-  '..oYYWWWWWWWWWWWWWWIYSo......',
-  '...oYYWWWWWWWWWWWWIIYSo......',
-  '....oYYWWWWWWWWWWIIYYo.......',
-  '.....oYYYYWWWWIIIIYYSo.......',
-  '......oSYYYYYYYYYSSSo........',
-  '.......ooSSSSSSSSooo.........',
-  '.........oooooooo............'
-];
-
-function foot(ctx, x, y, direction = 1) {
-  const pts = [[x, y - 3], [x + 3, y - 3], [x + 3, y - 1],
-    [x + 6 * direction, y - 1], [x + 7 * direction, y], [x - 1, y]];
-  polygon(ctx, '#51372d', pts.map(([px, py]) => [px, py + 1]));
-  rect(ctx, '#9c6335', x, y - 2, 3, 2);
-  rect(ctx, '#c08b49', x, y - 2, 2, 1);
-  rect(ctx, '#8a542f', Math.min(x, x + 5 * direction), y, 6, 1);
+function bocoBoot(ctx, x, y, rear = false) {
+  rect(ctx, BOCO.edge, x, y - 5, 4, 5);
+  rect(ctx, rear ? '#76543e' : '#a57048', x + 1, y - 4, 2, 3);
+  rect(ctx, '#e3b85f', x, y - 4, 4, 1);
+  rect(ctx, BOCO.ink, x - 1, y - 1, 8, 2);
+  rect(ctx, rear ? '#76543e' : '#bd8a57', x, y - 1, 6, 1);
+  rect(ctx, '#f3d48c', x + 5, y - 1, 1, 1);
 }
 
-function wing(ctx, pose, bob) {
+function bocoWing(ctx, pose, bob) {
+  const p = BOCO;
   if (pose.startsWith('glide') || pose === 'jump' || pose === 'win') {
     const lift = pose === 'glide1' ? 2 : 0;
-    polygon(ctx, '#795626', [[10, 18 + bob], [3, 16], [0, 8 + lift], [2, 5 + lift],
-      [5, 8 + lift], [5, 3 + lift], [8, 4 + lift], [11, 13 + bob], [15, 18 + bob]]);
-    polygon(ctx, '#f4cf32', [[10, 17 + bob], [4, 14], [2, 9 + lift], [4, 8 + lift],
-      [6, 12], [6, 5 + lift], [8, 6 + lift], [10, 14 + bob], [14, 18 + bob]]);
-    rect(ctx, '#fff28b', 6, 7 + lift, 1, 5);
-    rect(ctx, '#fffdef', 8, 12 + lift, 2, 5);
+    polygon(ctx, p.edge, [[13, 21 + bob], [7, 18], [2, 13 + lift], [0, 5 + lift],
+      [3, 7 + lift], [4, 2 + lift], [7, 6 + lift], [9, 4 + lift],
+      [12, 12 + lift], [16, 18 + bob]]);
+    polygon(ctx, p.gold, [[13, 20 + bob], [8, 17], [4, 12 + lift], [2, 8 + lift],
+      [5, 11 + lift], [5, 5 + lift], [8, 10 + lift], [9, 7 + lift],
+      [11, 14 + lift], [15, 19 + bob]]);
+    polygon(ctx, p.light, [[5, 6 + lift], [8, 11 + lift], [10, 16], [8, 15], [5, 10 + lift]]);
+    rect(ctx, p.cream, 10, 17, 3, 2);
   } else if (pose === 'swipe') {
-    polygon(ctx, '#795626', [[7, 18], [12, 15], [20, 18], [27, 19], [31, 23],
-      [27, 23], [29, 25], [24, 25], [26, 27], [18, 26], [10, 22]]);
-    polygon(ctx, '#f4cf32', [[9, 18], [13, 17], [20, 19], [27, 21], [28, 22],
-      [23, 22], [26, 24], [21, 24], [23, 25], [17, 24], [10, 21]]);
-    rect(ctx, '#fff28b', 13, 19, 6, 1);
-    rect(ctx, '#fffdef', 18, 21, 5, 1);
+    polygon(ctx, p.edge, [[11, 17], [16, 16], [22, 19], [31, 20],
+      [29, 22], [32, 24], [27, 24], [28, 27], [22, 25], [14, 23]]);
+    polygon(ctx, p.gold, [[12, 18], [16, 17], [22, 20], [28, 21],
+      [25, 22], [29, 23], [24, 23], [25, 25], [20, 23], [14, 22]]);
+    rect(ctx, p.light, 16, 19, 5, 2);
+    rect(ctx, p.cream, 21, 21, 3, 1);
   } else {
-    polygon(ctx, '#dca72b', [[6, 17 + bob], [9, 15 + bob], [13, 17 + bob],
-      [14, 20 + bob], [12, 23 + bob], [8, 22 + bob]]);
-    polygon(ctx, '#f9dd53', [[7, 17 + bob], [9, 16 + bob], [12, 18 + bob],
-      [12, 21 + bob], [10, 22 + bob], [8, 21 + bob]]);
-    rect(ctx, '#fff28b', 8, 17 + bob, 2, 2);
-    rect(ctx, '#fffdef', 9, 20 + bob, 2, 1);
+    polygon(ctx, p.edge, [[10, 17 + bob], [14, 16 + bob], [18, 18 + bob],
+      [17, 21 + bob], [13, 23 + bob], [9, 21 + bob]]);
+    polygon(ctx, p.gold, [[11, 18 + bob], [14, 17 + bob], [17, 19 + bob],
+      [15, 21 + bob], [12, 22 + bob], [10, 20 + bob]]);
+    rect(ctx, p.light, 11, 18 + bob, 3, 1);
+    rect(ctx, p.shade, 12, 21 + bob, 2, 1);
   }
 }
 
 function boco(ctx, pose) {
+  const p = BOCO;
   const run = pose.startsWith('run') ? Number(pose.slice(3)) : -1;
-  const bob = run >= 0 ? [0, -1, -1, 0, 1, 0][run] : pose === 'fall' ? -1 : 0;
-  if (pose === 'duck') {
-    matrix(ctx, [
-      '............ooooo..........',
-      '..........ooLYYYYSoo.......',
-      '...ooo...oLYWWWWWWYYo......',
-      '..oLYYo.oLYWWWWWEKWWYooooo.',
-      '.oLYWWYYLYWWWWWWWWWWYBBBbo.',
-      'oLYWWWWWWWWWWWWWWWWWYBboo..',
-      'oYWWWWWWWWWWWWWWWWWWYYo....',
-      'oYYWWWWWWWWWWWWWWWWIYSo....',
-      '.oYYWWWWWWWWWWWWWIIYYo.....',
-      '..oSYYYYWWWWWWIIIYYSo......',
-      '...ooSSYYYYYYYYSSSoo.......',
-      '.....ooooooooooooo.........'
-    ], BOCO_PALETTE, 2, 15);
-    rect(ctx, '#fff28b', 8, 23, 3, 2);
-    foot(ctx, 7, 31);
-    foot(ctx, 17, 31);
-    return;
+  const duck = pose === 'duck';
+  const airborne = ['jump', 'fall', 'glide0', 'glide1', 'swipe'].includes(pose);
+  const bob = run >= 0 ? [0, -1, 0, 0, -1, 0][run] : 0;
+  const headY = duck ? 12 : 4 + bob;
+  const headX = pose === 'peck' ? 3 : duck ? 2 : 0;
+  const bodyY = duck ? 5 : bob;
+  const cream = pose === 'hurt' ? '#ee645c' : p.cream;
+  const creamShade = pose === 'hurt' ? '#b7384e' : p.creamShade;
+
+  // Tail, scarf tails and far leg sit behind the fitted torso.
+  polygon(ctx, p.edge, [[11, 22 + bodyY], [5, 22 + bodyY], [0, 18 + bodyY],
+    [4, 18 + bodyY], [0, 13 + bodyY], [5, 15 + bodyY], [3, 10 + bodyY],
+    [8, 14 + bodyY], [12, 18 + bodyY]]);
+  polygon(ctx, p.gold, [[10, 21 + bodyY], [5, 20 + bodyY], [3, 19 + bodyY],
+    [7, 19 + bodyY], [3, 15 + bodyY], [7, 17 + bodyY], [5, 13 + bodyY],
+    [10, 17 + bodyY]]);
+  rect(ctx, p.light, 5, 16 + bodyY, 2, 2);
+  const flutter = run >= 0 ? [0, -1, 0, 1, 0, -1][run] : pose === 'glide1' ? -1 : 0;
+  polygon(ctx, p.redDark, [[18, 13 + bodyY], [11, 12 + bodyY],
+    [5, 10 + bodyY + flutter], [3, 13 + bodyY + flutter],
+    [7, 14 + bodyY + flutter], [5, 16 + bodyY + flutter], [12, 15 + bodyY], [18, 15 + bodyY]]);
+  polygon(ctx, p.red, [[17, 13 + bodyY], [10, 13 + bodyY],
+    [5, 11 + bodyY + flutter], [5, 13 + bodyY + flutter], [10, 14 + bodyY], [17, 14 + bodyY]]);
+
+  const strides = [[10, 19, 31, 29], [7, 18, 31, 27], [9, 17, 30, 28],
+    [12, 16, 29, 31], [14, 14, 27, 31], [11, 17, 29, 31]];
+  const [rearX, frontX, rearY, frontY] = run >= 0 ? strides[run] :
+    airborne ? [9, 19, 29, 28] : duck ? [8, 19, 31, 31] : [11, 19, 31, 31];
+  polygon(ctx, p.edge, [[12, 22 + bodyY], [15, 22 + bodyY],
+    [rearX + 3, rearY - 4], [rearX, rearY - 4]]);
+  rect(ctx, p.shade, rearX + 1, 24 + bodyY, 2, Math.max(1, rearY - 27 - bodyY));
+  bocoBoot(ctx, rearX, rearY, true);
+
+  polygon(ctx, p.edge, [[12, 14 + bodyY], [19, 14 + bodyY], [23, 17 + bodyY],
+    [23, 22 + bodyY], [20, 25 + bodyY], [13, 25 + bodyY], [8, 22 + bodyY], [8, 18 + bodyY]]);
+  polygon(ctx, p.gold, [[12, 15 + bodyY], [19, 15 + bodyY], [22, 18 + bodyY],
+    [22, 22 + bodyY], [19, 24 + bodyY], [13, 24 + bodyY], [9, 21 + bodyY], [9, 18 + bodyY]]);
+  polygon(ctx, creamShade, [[18, 16 + bodyY], [21, 17 + bodyY], [22, 21 + bodyY],
+    [19, 24 + bodyY], [16, 23 + bodyY], [16, 19 + bodyY]]);
+  polygon(ctx, cream, [[19, 17 + bodyY], [21, 18 + bodyY], [21, 21 + bodyY],
+    [19, 23 + bodyY], [17, 22 + bodyY], [18, 19 + bodyY]]);
+
+  // Open teal waistcoat, gold trim and a small leather hip pouch.
+  polygon(ctx, p.tealDark, [[11, 14 + bodyY], [17, 14 + bodyY], [18, 17 + bodyY],
+    [16, 21 + bodyY], [17, 24 + bodyY], [11, 24 + bodyY], [8, 21 + bodyY], [9, 17 + bodyY]]);
+  polygon(ctx, p.teal, [[12, 15 + bodyY], [16, 15 + bodyY], [16, 18 + bodyY],
+    [14, 21 + bodyY], [15, 23 + bodyY], [11, 22 + bodyY], [10, 19 + bodyY]]);
+  rect(ctx, p.tealLight, 11, 16 + bodyY, 2, 3);
+  rect(ctx, p.light, 16, 15 + bodyY, 1, 3);
+  rect(ctx, '#593f37', 11, 23 + bodyY, 10, 2);
+  rect(ctx, '#f7d77b', 18, 23 + bodyY, 2, 2);
+  rect(ctx, '#79513d', 9, 22 + bodyY, 4, 4);
+  rect(ctx, '#bf8852', 10, 22 + bodyY, 3, 2);
+  rect(ctx, p.light, 11, 23 + bodyY);
+
+  if (!duck) {
+    polygon(ctx, p.edge, [[17, 10 + bob], [22, 10 + bob], [22, 16 + bob],
+      [20, 19 + bob], [17, 18 + bob], [16, 14 + bob]]);
+    polygon(ctx, p.gold, [[18, 10 + bob], [21, 10 + bob], [21, 16 + bob],
+      [19, 18 + bob], [18, 16 + bob]]);
+    rect(ctx, cream, 20, 12 + bob, 1, 5);
   }
-  const x = pose === 'peck' ? 0 : 1;
-  const y = 3 + bob;
-  matrix(ctx, BOCO_BODY, BOCO_PALETTE, x, y);
-  wing(ctx, pose, bob);
-  if (pose === 'peck') {
-    polygon(ctx, '#795626', [[23, 10], [30, 10], [32, 12], [30, 15], [23, 15]]);
-    polygon(ctx, '#f6c052', [[23, 11], [30, 11], [32, 12], [30, 13], [23, 13]]);
-    rect(ctx, '#ffe88b', 25, 11, 5, 1);
-    rect(ctx, '#b68032', 24, 14, 6, 1);
-    rect(ctx, '#795626', 19, 9, 3, 1);
-  }
+
+  // A smaller head, swept three-feather crest and hooked beak make a runner silhouette.
+  ctx.save();
+  ctx.translate(headX, headY);
+  polygon(ctx, p.edge, [[13, 4], [9, 0], [13, 0], [12, -2], [17, 0],
+    [18, -3], [20, 0], [23, 1], [25, 4], [25, 8], [22, 11], [17, 10], [14, 8]]);
+  polygon(ctx, p.gold, [[14, 4], [12, 1], [16, 2], [14, 0], [18, 2],
+    [18, -1], [20, 2], [23, 2], [24, 4], [24, 8], [21, 10], [17, 9], [15, 7]]);
+  polygon(ctx, p.light, [[15, 3], [18, 3], [20, 2], [23, 3], [23, 4],
+    [18, 5], [16, 6]]);
+  rect(ctx, p.shade, 16, 8, 3, 1);
+  rect(ctx, cream, 21, 5, 3, 3);
+  rect(ctx, p.ink, 22, 5, 2, 3);
+  rect(ctx, '#ffffff', 22, 5);
+  rect(ctx, p.edge, 21, 4, 3, 1);
+  polygon(ctx, p.edge, [[24, 6], [28, 6], [31 - headX, 8], [29 - headX, 11], [27 - headX, 9], [24, 9]]);
+  polygon(ctx, '#f5c877', [[25, 7], [28, 7], [30 - headX, 8], [28 - headX, 9], [25, 8]]);
+  rect(ctx, '#aa683a', 25, 9, Math.max(1, 4 - headX), 1);
   if (pose === 'hurt') {
-    rect(ctx, '#fffdef', 19, 9, 3, 4);
-    matrix(ctx, ['K.K', '.K.', 'K.K'], BOCO_PALETTE, 19, 10);
-    rect(ctx, '#c77857', 18, 15, 2, 1);
+    rect(ctx, p.gold, 21, 5, 3, 3);
+    matrix(ctx, ['K.K', '.K.', 'K.K'], { K: p.ink }, 21, 5);
+  } else if (pose === 'win') {
+    rect(ctx, p.gold, 21, 5, 3, 3);
+    matrix(ctx, ['.K.', 'K.K'], { K: p.ink }, 21, 6);
   }
-  if (pose === 'win') {
-    rect(ctx, '#fffdef', 20, 10, 3, 3);
-    rect(ctx, '#292833', 20, 10, 3, 1);
-    rect(ctx, '#292833', 22, 11);
-  }
-  if (run >= 0) {
-    const strides = [[7, 19, 31, 30], [5, 18, 31, 28], [8, 16, 31, 28],
-      [10, 17, 30, 31], [12, 15, 28, 31], [8, 18, 29, 31]][run];
-    rect(ctx, '#7c4e30', strides[0] + 1, 25 + bob, 2, strides[2] - 25 - bob);
-    rect(ctx, '#7c4e30', strides[1] + 1, 25 + bob, 2, strides[3] - 25 - bob);
-    foot(ctx, strides[0], strides[2]);
-    foot(ctx, strides[1], strides[3]);
-  } else {
-    rect(ctx, '#7c4e30', 11, 25 + bob, 2, 5 - bob);
-    rect(ctx, '#7c4e30', 19, 25 + bob, 2, 5 - bob);
-    foot(ctx, pose === 'fall' ? 7 : 10, 31);
-    foot(ctx, 18, 31);
-  }
+  ctx.restore();
+
+  rect(ctx, p.redDark, 16, 13 + bodyY, 7, 3);
+  rect(ctx, p.red, 17, 13 + bodyY, 6, 2);
+  rect(ctx, p.redLight, 18, 13 + bodyY, 4, 1);
+  rect(ctx, p.light, 20, 15 + bodyY, 2, 1);
+
+  polygon(ctx, p.edge, [[18, 24 + bodyY], [21, 24 + bodyY],
+    [frontX + 3, frontY - 4], [frontX, frontY - 4]]);
+  rect(ctx, '#dca147', frontX + 1, 25 + bodyY, 2, Math.max(1, frontY - 28 - bodyY));
+  bocoBoot(ctx, frontX, frontY);
+  bocoWing(ctx, duck ? 'idle' : pose, bodyY);
 }
 
 function beetle(ctx, shellback = false, frame = -1) {
