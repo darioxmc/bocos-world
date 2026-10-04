@@ -881,39 +881,175 @@ function cloudLayer(ctx, key) {
   wrapped(ctx, -90, 152, (c, xx) => cloud(c, xx, 139, 2, [p.sky[4], p.sky[3], p.sky[5]]));
 }
 
+function distantBird(ctx, x, y, color, scale = 1) {
+  rect(ctx, color, x, y + 2 * scale, 3 * scale, scale);
+  rect(ctx, color, x + 3 * scale, y + scale, 2 * scale, scale);
+  rect(ctx, color, x + 5 * scale, y + 2 * scale, 3 * scale, scale);
+  rect(ctx, color, x + 2 * scale, y + 3 * scale, 4 * scale, scale);
+}
+
+function windRibbon(ctx, x, y, width, colors) {
+  rect(ctx, colors[0], x, y, width, 2);
+  rect(ctx, colors[1], x + 6, y + 2, Math.max(8, width - 14), 1);
+  rect(ctx, colors[0], x + width - 4, y - 2, 6, 2);
+  rect(ctx, colors[1], x + width, y - 4, 2, 3);
+}
+
+function hangingVine(ctx, x, length, colors) {
+  rect(ctx, colors[0], x, 0, 2, length);
+  rect(ctx, colors[1], x + 1, 0, 1, length);
+  for (let y = 14; y < length; y += 18) {
+    polygon(ctx, colors[0], [[x + 1, y], [x - 7, y - 5], [x - 8, y - 1], [x - 3, y + 3]]);
+    polygon(ctx, colors[2], [[x + 1, y + 8], [x + 8, y + 2], [x + 10, y + 5], [x + 5, y + 10]]);
+  }
+}
+
+function backgroundStar(ctx, x, y, size, colors) {
+  rect(ctx, colors[0], x - size, y, size * 2 + 1, 1);
+  rect(ctx, colors[0], x, y - size, 1, size * 2 + 1);
+  rect(ctx, colors[1], x - 1, y - 1, 3, 3);
+  rect(ctx, colors[2], x, y, 1, 1);
+}
+
 function chapterAtmosphere(ctx, key, variant) {
   const phase = Math.max(0, Math.min(6, variant));
   if (key === 'meadow') {
-    const colors = ['#f8e895', '#fff4c9', '#df8b85'];
-    for (let i = 0; i < 8 + phase * 3; i++) {
-      const x = (i * 67 + phase * 29) % BG_WIDTH;
-      const y = 42 + (i * 31 + phase * 17) % 170;
-      rect(ctx, colors[(i + phase) % colors.length], x, y, 3, 1);
-      rect(ctx, colors[(i + phase + 1) % colors.length], x + 1, y + 1, 1, 2);
-    }
-    if (phase >= 1) for (const x of [116, 354]) {
-      rect(ctx, '#6d8d79', x, 109, 2, 68); rect(ctx, '#d9d7a4', x - 13, 117, 28, 2);
-      rect(ctx, '#d9d7a4', x, 104, 2, 28);
+    const colors = ['#708f89', '#8fa79a', '#607f7d'];
+    for (let i = 0; i < 2 + Math.floor(phase / 2); i++) {
+      const x = 42 + (i * 137 + phase * 31) % 430;
+      const y = 48 + (i * 37 + phase * 13) % 78;
+      distantBird(ctx, x, y, colors[(i + phase) % colors.length], i % 3 === 2 ? 2 : 1);
     }
   } else if (key === 'cliff') {
-    for (let i = 0; i < 7 + phase * 2; i++) {
+    for (let i = 0; i < 4 + phase; i++) {
       const x = (i * 83 + phase * 23) % BG_WIDTH;
       const y = 35 + (i * 29) % 190;
-      rect(ctx, i % 2 ? '#d8e8df' : '#abc8cd', x, y, 18 + (i % 3) * 8, 1);
-      if (phase >= 2 && i % 3 === 0) polygon(ctx, '#e7c967', [[x + 5, y + 8], [x + 9, y + 12], [x + 5, y + 16], [x + 1, y + 12]]);
+      windRibbon(ctx, x, y, 26 + (i % 3) * 12, ['#d8e8df', '#abc8cd']);
     }
   } else if (key === 'canopy') {
-    for (let i = 0; i < 10 + phase * 4; i++) {
-      const x = (i * 47 + phase * 41) % BG_WIDTH;
-      const y = 30 + (i * 53 + phase * 11) % 230;
-      rect(ctx, i % 3 ? '#b8cf85' : '#f3d887', x, y, 2, 2);
-      if (phase >= 3 && i % 4 === 0) rect(ctx, '#6f9675', x, 0, 1, y - 4);
+    for (let i = 0; i < 2 + phase; i++) {
+      const x = 34 + (i * 79 + phase * 43) % 444;
+      const length = 42 + (i * 23 + phase * 11) % 92;
+      hangingVine(ctx, x, length, ['#416f60', '#77967a', '#9caf7e']);
     }
   } else {
-    for (let i = 0; i < 14 + phase * 3; i++) {
-      const x = (i * 41 + phase * 19) % BG_WIDTH;
-      const y = 18 + (i * 37) % 190;
-      rect(ctx, i % 4 ? '#f7e1b1' : '#f0b7b4', x, y, i % 3 === 0 ? 2 : 1, 1);
+    for (let i = 0; i < 5 + phase; i++) {
+      const x = 27 + (i * 67 + phase * 29) % 458;
+      const y = 24 + (i * 43 + phase * 17) % 174;
+      backgroundStar(ctx, x, y, i % 4 === 0 ? 3 : 2, ['#d5bdc5', '#f7e1b1', '#fff3d0']);
+    }
+  }
+}
+
+function windmillProp(ctx, frame) {
+  const cx = 32;
+  const cy = 23;
+  polygon(ctx, '#566f69', [[23, 77], [26, 30], [38, 30], [42, 77]]);
+  polygon(ctx, '#b9bd91', [[26, 75], [28, 32], [36, 32], [39, 75]]);
+  polygon(ctx, '#d9d6a3', [[29, 34], [32, 33], [32, 73], [28, 73]]);
+  rect(ctx, '#52655f', 29, 55, 7, 9);
+  rect(ctx, '#e0c77d', 31, 57, 3, 4);
+  polygon(ctx, '#4d625f', [[22, 31], [27, 25], [37, 25], [42, 31]]);
+  polygon(ctx, '#8b755d', [[25, 30], [29, 27], [36, 27], [39, 30]]);
+
+  const turn = frame * Math.PI / 16;
+  for (let blade = 0; blade < 4; blade++) {
+    const angle = turn + blade * Math.PI / 2;
+    const ux = Math.cos(angle);
+    const uy = Math.sin(angle);
+    const px = -uy;
+    const py = ux;
+    const point = (distance, spread) => [Math.round(cx + ux * distance + px * spread), Math.round(cy + uy * distance + py * spread)];
+    polygon(ctx, '#56615d', [point(4, -2), point(24, -5), point(27, -2), point(6, 2)]);
+    polygon(ctx, '#e4d9a9', [point(7, -1), point(22, -3), point(24, -2), point(8, 1)]);
+    rect(ctx, '#f4e6bc', ...point(20, -1), 2, 2);
+  }
+  rect(ctx, '#4c5957', cx - 3, cy - 3, 7, 7);
+  rect(ctx, '#d7a956', cx - 1, cy - 1, 3, 3);
+}
+
+function kiteProp(ctx, frame) {
+  const bob = [1, 0, -1, -2, -1, 0, 1, 2][frame % 8];
+  const sway = [-1, 0, 1, 2, 1, 0, -1, -2][frame % 8];
+  polygon(ctx, '#465a68', [[12 + sway, 2 + bob], [21 + sway, 11 + bob], [12 + sway, 22 + bob], [3 + sway, 11 + bob]]);
+  polygon(ctx, '#dfbd5f', [[12 + sway, 4 + bob], [19 + sway, 11 + bob], [12 + sway, 12 + bob]]);
+  polygon(ctx, '#c96f68', [[12 + sway, 12 + bob], [19 + sway, 12 + bob], [12 + sway, 20 + bob]]);
+  polygon(ctx, '#f0d883', [[5 + sway, 11 + bob], [12 + sway, 4 + bob], [12 + sway, 12 + bob]]);
+  rect(ctx, '#fff0b2', 11 + sway, 10 + bob, 3, 3);
+  const tailX = 12 + sway;
+  for (let n = 0; n < 3; n++) {
+    const x = tailX + (n % 2 ? -2 : 2);
+    const y = 23 + bob + n * 5;
+    rect(ctx, '#526b76', x, y, 2, 5);
+    polygon(ctx, '#c96f68', [[x - 2, y + 1], [x + 1, y + 3], [x - 2, y + 5]]);
+  }
+}
+
+function mothLightProp(ctx, frame) {
+  const open = frame % 4 === 0 || frame % 4 === 3;
+  const top = open ? 1 : 4;
+  const bottom = open ? 17 : 15;
+  polygon(ctx, '#38524d', [[13, 6], [8, top], [1, top + 2], [0, 9], [7, bottom], [13, 12]]);
+  polygon(ctx, '#38524d', [[15, 6], [20, top], [27, top + 2], [28, 9], [21, bottom], [15, 12]]);
+  polygon(ctx, '#b8c98b', [[12, 7], [8, top + 2], [3, top + 3], [3, 8], [8, bottom - 2], [13, 11]]);
+  polygon(ctx, '#b8c98b', [[16, 7], [20, top + 2], [25, top + 3], [25, 8], [20, bottom - 2], [15, 11]]);
+  polygon(ctx, '#f0da8a', [[10, 6], [7, top + 3], [4, top + 4], [8, 10], [12, 10]]);
+  polygon(ctx, '#f0da8a', [[18, 6], [21, top + 3], [24, top + 4], [20, 10], [16, 10]]);
+  rect(ctx, '#38524d', 12, 3, 5, 14);
+  rect(ctx, '#f3d878', 13, 4, 3, 12);
+  rect(ctx, '#fff5b7', 14, 5, 2, 8);
+  rect(ctx, '#38524d', 12, 0, 1, 4);
+  rect(ctx, '#38524d', 16, 0, 1, 4);
+}
+
+function featherProp(ctx, frame) {
+  const angle = [-0.4, -0.28, -0.14, 0, 0.14, 0.28, 0.4, 0.14][frame % 8];
+  const rotate = ([x, y]) => {
+    const dx = x - 12;
+    const dy = y - 14;
+    return [Math.round(12 + dx * Math.cos(angle) - dy * Math.sin(angle)), Math.round(14 + dx * Math.sin(angle) + dy * Math.cos(angle))];
+  };
+  polygon(ctx, '#756a86', [[12, 1], [19, 6], [19, 15], [12, 28], [5, 21], [4, 11]].map(rotate));
+  polygon(ctx, '#e6c2b8', [[12, 3], [17, 7], [17, 14], [12, 24], [8, 19], [7, 11]].map(rotate));
+  polygon(ctx, '#f4d8c2', [[12, 4], [15, 8], [15, 13], [12, 20], [10, 17], [9, 11]].map(rotate));
+  const stem = [[12, 5], [12, 28]].map(rotate);
+  polygon(ctx, '#665e7b', [stem[0], [stem[0][0] + 1, stem[0][1]], [stem[1][0] + 1, stem[1][1]], stem[1]]);
+}
+
+const SCENERY_FRAMES = { windmill: 8, kite: 8, moth: 4, feather: 8 };
+const SCENERY_PROPS = {
+  meadow: [
+    { kind: 'windmill', x: 118, y: 121, chapter: 1, phase: 0, direction: 1 },
+    { kind: 'windmill', x: 366, y: 137, chapter: 4, phase: 3, direction: -1 },
+  ],
+  cliff: [
+    { kind: 'kite', x: 91, y: 82, chapter: 2, phase: 0, direction: 1 },
+    { kind: 'kite', x: 281, y: 68, chapter: 4, phase: 3, direction: -1 },
+    { kind: 'kite', x: 456, y: 112, chapter: 5, phase: 6, direction: 1 },
+  ],
+  canopy: [
+    { kind: 'moth', x: 76, y: 86, chapter: 1, phase: 0, direction: 1 },
+    { kind: 'moth', x: 236, y: 143, chapter: 2, phase: 2, direction: -1 },
+    { kind: 'moth', x: 401, y: 70, chapter: 4, phase: 1, direction: 1 },
+    { kind: 'moth', x: 487, y: 178, chapter: 6, phase: 3, direction: -1 },
+  ],
+  roost: [
+    { kind: 'feather', x: 73, y: 72, chapter: 0, phase: 0, direction: 1 },
+    { kind: 'feather', x: 258, y: 118, chapter: 0, phase: 3, direction: -1 },
+    { kind: 'feather', x: 444, y: 61, chapter: 0, phase: 6, direction: 1 },
+  ],
+};
+
+function createSceneryTextures(scene) {
+  for (const [kind, frames] of Object.entries(SCENERY_FRAMES)) {
+    for (let frame = 0; frame < frames; frame++) {
+      const size = kind === 'windmill' ? [64, 80] : kind === 'kite' ? [24, 40] : kind === 'moth' ? [29, 19] : [24, 30];
+      texture(scene, `skybound-scenery-${kind}-${frame}`, size[0], size[1], ctx => {
+        if (kind === 'windmill') windmillProp(ctx, frame);
+        else if (kind === 'kite') kiteProp(ctx, frame);
+        else if (kind === 'moth') mothLightProp(ctx, frame);
+        else featherProp(ctx, frame);
+      });
     }
   }
 }
@@ -1222,6 +1358,7 @@ const LANDSCAPES = {
 /** Owns backdrop display objects, not the camera or gameplay state. */
 export function createBackdrop(scene, areaKey, worldWidth, worldHeight) {
   const key = Object.hasOwn(THEMES, areaKey) ? areaKey : 'meadow';
+  createSceneryTextures(scene);
   for (let variant = 0; variant <= 6; variant++) {
     texture(scene, `skybound-bg-${key}-atmosphere-${variant}`, BG_WIDTH, BG_HEIGHT,
       ctx => chapterAtmosphere(ctx, key, variant));
@@ -1236,6 +1373,11 @@ export function createBackdrop(scene, areaKey, worldWidth, worldHeight) {
     const object = scene.add.tileSprite(0, 0, 320, 240, name);
     object.setOrigin(0, 0).setScrollFactor(0).setDepth(-100 + i * 10);
     return object;
+  });
+  const scenery = SCENERY_PROPS[key].map(spec => {
+    const object = scene.add.image(spec.x, spec.y, `skybound-scenery-${spec.kind}-0`);
+    object.setOrigin(0.5).setScrollFactor(0).setDepth(-55).setVisible(false);
+    return { ...spec, object, frame: -1 };
   });
   let alive = true;
   let viewWidth = 320;
@@ -1267,6 +1409,25 @@ export function createBackdrop(scene, areaKey, worldWidth, worldHeight) {
       const baseY = i === 5 ? Math.min(nearOffset, maxY) : 0;
       layers[i].tilePositionY = Math.floor(baseY + progressY * (maxY - baseY) * vertical[i]);
     }
+    const sceneryOffsetX = Math.floor(scrollX * 0.22 + time * (0.00035 + chapterVariant * 0.00008));
+    const sceneryOffsetY = Math.floor(progressY * Math.max(0, BG_HEIGHT - h) * 0.18);
+    for (const prop of scenery) {
+      const visible = chapterVariant >= prop.chapter;
+      prop.object.setVisible(visible);
+      if (!visible) continue;
+      const count = SCENERY_FRAMES[prop.kind];
+      const cadence = prop.kind === 'windmill' ? 120 : prop.kind === 'moth' ? 150 : 175;
+      const tick = Math.floor(time / cadence);
+      const frame = ((tick * prop.direction + prop.phase) % count + count) % count;
+      if (frame !== prop.frame) {
+        prop.frame = frame;
+        prop.object.setTexture(`skybound-scenery-${prop.kind}-${frame}`);
+      }
+      const travel = prop.kind === 'feather' ? Math.floor(time / 90) * prop.direction : 0;
+      const halfWidth = prop.object.width / 2;
+      prop.object.x = ((prop.x + travel - sceneryOffsetX + halfWidth) % BG_WIDTH + BG_WIDTH) % BG_WIDTH - halfWidth;
+      prop.object.y = prop.y - sceneryOffsetY;
+    }
   }
 
   // Width is deliberately not used to size a giant world texture. A repeating
@@ -1276,15 +1437,21 @@ export function createBackdrop(scene, areaKey, worldWidth, worldHeight) {
   return {
     update,
     get chapter() { return chapterVariant; },
+    get scenery() {
+      return scenery.map(prop => ({ kind: prop.kind, chapter: prop.chapter, visible: prop.object.visible,
+        frame: prop.frame, texture: prop.object.texture.key, x: prop.object.x, y: prop.object.y }));
+    },
     setChapter(variant = 0) {
       chapterVariant = Math.max(0, Math.min(6, Number(variant) || 0));
       layers[2].setTexture(`skybound-bg-${key}-atmosphere-${chapterVariant}`);
       layers[2].setAlpha(chapterVariant === 0 ? 0.62 : Math.min(0.9, 0.65 + chapterVariant * 0.04));
+      for (const prop of scenery) prop.object.setVisible(chapterVariant >= prop.chapter);
     },
     destroy() {
       if (!alive) return;
       alive = false;
       for (const object of layers) object.destroy();
+      for (const prop of scenery) prop.object.destroy();
     }
   };
 }
