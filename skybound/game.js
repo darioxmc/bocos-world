@@ -106,7 +106,8 @@ class Play extends Phaser.Scene {
     } else {
       this.physics.pause();
       if (data.menu === 'slots') shell.showSlots(); else shell.showTitle();
-      audio.stopMusic();
+      audio.resume();
+      audio.startMenuMusic();
     }
     this.refreshHud();
   }

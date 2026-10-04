@@ -27,6 +27,23 @@ export const MUSIC_THEMES = [
     answer: [19, 16, 14, 12, 16, 19, 21, -1, 14, 17, 19, 24, 21, 19, 16, 14, 12, 14, 16, 19, 17, 14, 12, 9, 7, 12, 16, 14, 12, 9, 7, 12] },
 ];
 
+// Boco's leitmotif uses a broad, rising fanfare softened by woodland
+// arpeggios and bird-call ornaments. The second pass lifts the melody.
+export const BOCO_THEME = {
+  bpm: 112,
+  roots: [48, 48, 53, 55, 48, 57, 53, 55, 48, 50, 53, 55, 57, 53, 55, 48],
+  melody: [
+    0, 4, 7, 12, 7, 9, 7, 4,
+    2, 7, 11, 14, 12, 11, 7, -1,
+    0, 4, 9, 12, 9, 7, 4, 2,
+    7, 11, 14, 19, 16, 14, 11, -1,
+    7, 12, 16, 19, 16, 14, 12, 9,
+    4, 9, 12, 16, 14, 12, 9, -1,
+    5, 9, 12, 17, 16, 12, 9, 7,
+    7, 12, 14, 19, 16, 14, 12, 0,
+  ],
+};
+
 export class AudioEngine {
   constructor() {
     this.context = null;
@@ -257,7 +274,7 @@ export class AudioEngine {
     const at = typeof area === 'string' ? AREA_NAMES.indexOf(area) : area;
     if (!Number.isInteger(at) || at < 0 || at >= MUSIC_THEMES.length) throw new RangeError('Unknown music area');
     const nextChapter = Math.max(0, Math.min(6, Number(chapter) || 0));
-    const nextMode = mode === 'boss' ? 'boss' : 'level';
+    const nextMode = ['boss', 'boco'].includes(mode) ? mode : 'level';
     if (this._area === at && this._chapter === nextChapter && this._musicMode === nextMode && this._timer !== null) return;
     this._haltMusic();
     this._area = at;
@@ -266,6 +283,8 @@ export class AudioEngine {
     this._step = 0;
     this._restartMusic();
   }
+
+  startMenuMusic() { this.startMusic(0, 0, 'boco'); }
 
   setMusicChapter(chapter = 0, mode = 'level') {
     if (this._area === null || this._destroyed) return;
@@ -280,7 +299,7 @@ export class AudioEngine {
 
   _scheduleMusic() {
     if (!this._canMusic()) { this._haltMusic(); return; }
-    const theme = MUSIC_THEMES[this._area];
+    const theme = this._musicMode === 'boco' ? BOCO_THEME : MUSIC_THEMES[this._area];
     const stepLength = 60 / theme.bpm / 4;
     const now = this.context.currentTime;
     // Skip missed beats after main-thread stalls instead of replaying a backlog.
@@ -302,6 +321,7 @@ export class AudioEngine {
   }
 
   _musicStep(theme, step, when, beat) {
+    if (this._musicMode === 'boco') { this._bocoMusicStep(theme, step, when, beat); return; }
     if (this._musicMode === 'boss') { this._bossMusicStep(theme, step, when, beat); return; }
     const bar = Math.floor(step / 16);
     const phase = step % 16;
@@ -332,6 +352,47 @@ export class AudioEngine {
     const hatEvery = this._chapter >= 3 || theme.percussion === 'bright' ? 2 : 4;
     if (phase % hatEvery === 0) this._voice('music', when, 0.035, 0, 0.018 + this._chapter * 0.0015, 'square', null, true, { type: 'highpass', frequency: 6500 });
     if (phase === 0 && bar % 4 === 0) note(12 + (bar % 8 ? 7 : 0), beat * 10, 0.018, 'sine');
+  }
+
+  _bocoMusicStep(theme, step, when, beat) {
+    const bar = Math.floor(step / 16);
+    const phase = step % 16;
+    const root = theme.roots[bar % theme.roots.length];
+    const secondPass = bar >= 8;
+    const note = (offset, duration, volume, type = 'triangle', delay = 0) =>
+      this._voice('music', when + delay, duration, midi(root + offset), volume, type);
+
+    if (phase % 2 === 0) {
+      const melody = theme.melody[(bar % 8) * 8 + phase / 2];
+      const lift = secondPass && [1, 2, 5, 6].includes(bar % 8) ? 2 : 0;
+      if (melody !== -1) note(24 + melody + lift, beat * (phase === 14 ? 2.7 : 1.7), 0.077, 'square');
+      const arpeggio = [0, 7, 12, 16][(phase / 2 + bar) % 4];
+      note(12 + arpeggio, beat * 1.45, 0.034, 'triangle');
+    }
+
+    if (phase === 0) {
+      note(12, beat * 7.5, 0.018, 'sine');
+      note(19, beat * 7.5, 0.014, 'triangle');
+    }
+    if (phase % 4 === 0) {
+      const bass = phase === 8 ? 7 : phase === 12 && bar % 4 === 3 ? 9 : 0;
+      note(bass, beat * 2.65, 0.125, 'triangle');
+    }
+
+    if ([0, 8].includes(phase)) this._voice('music', when, 0.12, 122, 0.14, 'sine', 38);
+    if ([4, 12].includes(phase)) {
+      this._voice('music', when, 0.1, 0, 0.07, 'square', null, true, { type: 'highpass', frequency: 1750 });
+      this._voice('music', when, 0.065, 180, 0.026, 'triangle', 95);
+    }
+    if ([2, 6, 10, 14].includes(phase)) {
+      this._voice('music', when, 0.035, 0, 0.012, 'square', null, true, { type: 'highpass', frequency: 6100 });
+    }
+
+    // A two-note answer at each four-bar cadence evokes a distant bird call.
+    if (phase === 13 && bar % 4 === 3) {
+      note(36 + (secondPass ? 7 : 4), beat * 0.72, 0.036, 'triangle');
+      note(43 + (secondPass ? 7 : 4), beat * 1.1, 0.03, 'triangle', beat * 0.62);
+    }
   }
 
   _bossMusicStep(theme, step, when, beat) {
