@@ -37,6 +37,13 @@ try {
     assert(after.every(prop => !prop.visible || Number.isInteger(prop.x) && Number.isInteger(prop.y)), `${key} scenery stays on the pixel grid`);
     const image = await page.evaluate(() => document.querySelector('#game-mount canvas').toDataURL('image/png'));
     await writeFile(`qa/backdrops/${key}-late.png`, Buffer.from(image.split(',')[1], 'base64'));
+    const landscapeLayers = await page.evaluate(key => Object.fromEntries([3, 4, 5].map(index => {
+      const source = skybound.scene.textures.get(`skybound-bg-${key}-${index}`).getSourceImage();
+      return [index, source.toDataURL('image/png')];
+    })), key);
+    for (const [index, data] of Object.entries(landscapeLayers)) {
+      await writeFile(`qa/backdrops/${key}-layer-${index}.png`, Buffer.from(data.split(',')[1], 'base64'));
+    }
   }
 
   const assets = await page.evaluate(() => {

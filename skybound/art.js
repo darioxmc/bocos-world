@@ -1156,12 +1156,15 @@ function grass(ctx, x, y, colors) {
 
 function meadowNear(ctx) {
   const p = THEMES.meadow;
-  rollingRidge(ctx, 284, [0, -5, -8, -3, 7, 12, 9, 1, -7, -9, -5, 3, 7, 3, 0], p.near);
-  for (const [x, y] of [[4, 283], [41, 281], [105, 290], [163, 286], [215, 278],
-    [258, 282], [318, 288], [399, 281], [450, 283], [493, 285]]) {
+  const ridgeY = 284;
+  const ridgeShape = [0, -5, -8, -3, 7, 12, 9, 1, -7, -9, -5, 3, 7, 3, 0];
+  rollingRidge(ctx, ridgeY, ridgeShape, p.near);
+  for (const x of [4, 41, 105, 163, 215, 258, 318, 399, 450, 493]) {
+    const y = ridgeHeightAt(x + 3, ridgeY, ridgeShape) + 1;
     wrapped(ctx, x - 4, 20, (c, xx) => grass(c, xx + 4, y, p.near));
   }
-  for (const [x, y] of [[27, 280], [171, 274], [317, 278], [442, 279]]) {
+  for (const x of [27, 171, 317, 442]) {
+    const y = ridgeHeightAt(x, ridgeY, ridgeShape) - 6;
     rect(ctx, p.near[1], x, y, 1, 9);
     matrix(ctx, ['.H.', 'HHH', '.Y.'], { H: '#b6be92', Y: '#dcd4a3' }, x - 1, y - 2);
   }
@@ -1275,8 +1278,11 @@ function canopyMiddle(ctx) {
     wrapped(ctx, x - 30, w + 62, (c, xx) => forestTrunk(c, xx + 30, w, p.middle[0], p.middle[1], by));
     wrapped(ctx, x - 18, w + 67, (c, xx) => tree(c, xx, -24, 2, p.middle));
   }
-  rollingRidge(ctx, 277, [1, -6, -11, -2, 6, 0, -9, -6, 3, 8, 5, 1], p.middle);
-  for (const [x, y] of [[67, 245], [184, 251], [329, 236], [479, 250]]) {
+  const ridgeY = 277;
+  const ridgeShape = [1, -6, -11, -2, 6, 0, -9, -6, 3, 8, 5, 1];
+  rollingRidge(ctx, ridgeY, ridgeShape, p.middle);
+  for (const x of [67, 184, 329, 479]) {
+    const y = ridgeHeightAt(x, ridgeY, ridgeShape) - 12;
     polygon(ctx, '#477d68', [[x - 20, y + 14], [x - 15, y], [x - 3, y - 9],
       [x + 10, y - 6], [x + 22, y + 12]]);
     rect(ctx, '#86a17c', x - 5, y - 5, 12, 1);
@@ -1298,11 +1304,15 @@ function fern(ctx, x, y, colors) {
 
 function canopyNear(ctx) {
   const p = THEMES.canopy;
-  rollingRidge(ctx, 321, [0, 4, 8, 2, -5, -8, -1, 6, 2, -3, 0], p.near);
-  for (const [x, y] of [[8, 322], [87, 321], [174, 315], [263, 323], [351, 319], [450, 320]]) {
+  const ridgeY = 321;
+  const ridgeShape = [0, 4, 8, 2, -5, -8, -1, 6, 2, -3, 0];
+  rollingRidge(ctx, ridgeY, ridgeShape, p.near);
+  for (const x of [8, 87, 174, 263, 351, 450]) {
+    const y = ridgeHeightAt(x + 2, ridgeY, ridgeShape) + 1;
     wrapped(ctx, x - 16, 34, (c, xx) => fern(c, xx + 16, y, p.near));
   }
-  for (const [x, y] of [[52, 322], [224, 320], [398, 325]]) {
+  for (const x of [52, 224, 398]) {
+    const y = ridgeHeightAt(x + 2, ridgeY, ridgeShape) + 2;
     rect(ctx, '#859876', x, y - 12, 3, 11);
     polygon(ctx, '#648f83', [[x - 5, y - 10], [x - 4, y - 16], [x, y - 19],
       [x + 5, y - 17], [x + 9, y - 10]]);
@@ -1355,8 +1365,11 @@ function roostMiddle(ctx) {
 
 function roostNear(ctx) {
   const p = THEMES.roost;
-  rollingRidge(ctx, 356, [0, -6, -9, -1, 4, 7, 1, -5, -8, -2, 0], p.near);
-  for (const [x, y] of [[22, 346], [129, 354], [274, 350], [405, 348], [481, 355]]) {
+  const ridgeY = 356;
+  const ridgeShape = [0, -6, -9, -1, 4, 7, 1, -5, -8, -2, 0];
+  rollingRidge(ctx, ridgeY, ridgeShape, p.near);
+  for (const x of [22, 129, 274, 405, 481]) {
+    const y = ridgeHeightAt(x, ridgeY, ridgeShape) + 2;
     wrapped(ctx, x - 18, 38, (c, xx) => {
       polygon(c, p.near[0], [[xx, y], [xx + 4, y - 11], [xx + 16, y - 16],
         [xx + 27, y - 9], [xx + 36, y + 1]]);
@@ -1365,7 +1378,8 @@ function roostNear(ctx) {
       rect(c, p.near[2], xx + 10, y - 11, 9, 1);
     });
   }
-  for (const [x, y] of [[80, 351], [222, 354], [376, 349]]) {
+  for (const x of [80, 222, 376]) {
+    const y = ridgeHeightAt(x + 3, ridgeY, ridgeShape) + 1;
     grass(ctx, x, y, ['#6d7880', '#a2a68f', '#d8c3a0']);
   }
 }
