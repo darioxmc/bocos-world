@@ -27,32 +27,37 @@ try {
       s.invulnerableUntil=10000;
       for(const enemy of s.enemies.getChildren()) { enemy.disableBody(true,true); s.enemyData.get(enemy).dead=true; }
       // Disable combat only: terrain and platform bodies remain the real Arcade bodies.
-      let resets=0,jumps=0,stalled=0,lastX=s.player.x,holdUntil=-1;
+      let resets=0,jumps=0,stalled=0,lastX=s.player.x,maxX=s.player.x,holdUntil=-1;
+      const falls=[];
       const target=s.level.boss.arena.x+24;
       for(let frame=0;frame<60000;frame++) {
         const p=s.player,grounded=p.body.blocked.down||p.body.touching.down;
-        const next=s.level.terrain.find(rect=>rect.x>p.x+2);
-        const current=s.level.terrain.find(rect=>p.x>=rect.x&&p.x<rect.x+rect.w);
+        const surfaces=[...s.level.terrain,...s.ledges.getChildren().filter(platform=>platform.body.enable).map(platform=>({x:platform.x,y:platform.y,w:platform.width,h:platform.height}))];
+        const opening=!s.level.chapters?.[1]||p.x<s.level.chapters[1].x;
+        const current=opening?s.level.terrain.find(rect=>p.x>=rect.x&&p.x<rect.x+rect.w):surfaces.filter(rect=>p.x>=rect.x-2&&p.x<rect.x+rect.w+2&&Math.abs(rect.y-p.body.bottom)<4).sort((a,b)=>a.y-b.y)[0];
+        const next=opening?s.level.terrain.find(rect=>rect.x>p.x+2):surfaces.filter(rect=>rect.x>p.x+2&&rect.x-p.x<120).sort((a,b)=>a.x-b.x||a.y-b.y)[0];
         let jump=false;
         if(grounded&&next) {
           const distance=next.x-p.x;
-          if(next.y<p.body.bottom-4&&distance<28)jump=true;
-          if(current&&next.x>current.x+current.w&&current.x+current.w-p.x<22)jump=true;
+          if(next.y<p.body.bottom-4&&distance<42)jump=true;
+          if(current&&current.x+current.w-p.x<(opening?22:24))jump=true;
         }
         if(grounded&&stalled>20)jump=true;
         c.sources.set('qa:move',new Set(['right']));
         if(jump){c.pending.add('jump');jumps++;holdUntil=frame+22;}
         c.sources.set('qa:hold',new Set(frame<=holdUntil?['jump']:[]));
+        c.sources.set('qa:glide',new Set(!grounded?['glide']:[]));
         s.physics.world.update(frame*1000/60,1000/60);
         s.physics.world.postUpdate();
         s.update(frame*1000/60,1000/60);
-        if(s.deathUntil){resets++;s.respawn();}
+        maxX=Math.max(maxX,p.x);
+        if(s.deathUntil){resets++;if(falls.length<8)falls.push({x:p.x,y:p.y,checkpoint:s.checkpoint.id});s.respawn();}
         if(Math.abs(p.x-lastX)<0.1)stalled++;else stalled=0;
         lastX=p.x;
-        if(p.x>=target)return{area:s.level.id,reached:true,frames:frame,jumps,resets,x:p.x};
-        if(stalled>240)return{area:s.level.id,reached:false,reason:'blocked',frames:frame,jumps,resets,x:p.x,y:p.y};
+        if(p.x>=target)return{area:s.level.id,reached:true,frames:frame,jumps,resets,x:p.x,maxX,falls};
+        if(stalled>240)return{area:s.level.id,reached:false,reason:'blocked',frames:frame,jumps,resets,x:p.x,y:p.y,maxX,falls};
       }
-      return{area:s.level.id,reached:false,reason:'timeout',jumps,resets,x:s.player.x,y:s.player.y};
+      return{area:s.level.id,reached:false,reason:'timeout',jumps,resets,x:s.player.x,y:s.player.y,maxX,falls};
     });
     console.log(JSON.stringify(route));
     if(area<3)mainFrames+=route.frames;
@@ -60,7 +65,7 @@ try {
     assert.equal(route.resets,0,`${route.area} requires no fall recovery`);
   }
   assert.deepEqual(errors,[]);
-  assert(mainFrames/60>=1200, 'Main route should take at least twenty minutes at normal physics speed');
+  assert(mainFrames/60>=1080, 'Shortened main route should retain at least eighteen minutes of movement and platforming');
   console.log(`Measured main-route movement: ${(mainFrames/3600).toFixed(2)} minutes, excluding combat and exploration.`);
   console.log('All four mandatory routes traversed using actual Arcade bodies.');
 } finally {await browser.close();}

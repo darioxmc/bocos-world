@@ -284,6 +284,7 @@ export class AudioEngine {
       case 'boss': tone(82, 0.35, 0.23, 'sawtooth', 41); tone(123, 0.3, 0.12, 'square', 61); noise(0.2, 0.13, 250); break;
       case 'opening': tone(midi(72), 0.12, 0.14, 'triangle'); tone(midi(79), 0.2, 0.13, 'square', null, 0.07); break;
       case 'wind-strike': tone(760, 0.12, 0.09, 'triangle', 380); noise(0.09, 0.035, 2400); break;
+      case 'enemy-heal': tone(midi(72), 0.1, 0.1, 'triangle'); tone(midi(79), 0.2, 0.09, 'square', null, 0.06); break;
       case 'crest': tone(midi(67), 0.2, 0.13, 'triangle'); tone(midi(72), 0.25, 0.14, 'square', null, 0.09); tone(midi(79), 0.34, 0.13, 'triangle', null, 0.18); tone(midi(84), 0.48, 0.11, 'square', null, 0.28); break;
       case 'win': tone(midi(72), 0.3, 0.14); tone(midi(76), 0.32, 0.12, 'triangle', null, 0.06); tone(midi(79), 0.38, 0.11, 'square', null, 0.12); tone(midi(84), 0.5, 0.12, 'triangle', null, 0.16); break;
       case 'menu': tone(620, 0.065, 0.12, 'triangle', 930); break;

@@ -33,8 +33,10 @@ try {
     s.attackUntil = s.clock + .14; s.attackVictims.clear(); s.updateAttack();
     const blocked = state.hp === 1 && !enemy.texture.key.endsWith('-hit');
     s.player.body.reset(enemy.x - 20, enemy.y); s.facing = 1;
+    s.health = s.maxHealth - 1;
     s.attackVictims.clear(); s.updateAttack();
     const defeated = state.dead && !enemy.body.enable && enemy.texture.key.endsWith('-hit');
+    const enemyHeal = s.health === s.maxHealth && s.children.list.some(child => child.texture?.key === 'health-wisp');
     s.bossEngaged = true; s.bossState.phase = 'recover'; s.bossState.until = s.clock + 2;
     s.hitBoss();
     const bossHit = s.bossState.hp === 5 && s.boss.texture.key.endsWith('-hit');
@@ -63,11 +65,11 @@ try {
     const hitPixels = s.textures.get('shellback-hit').getSourceImage().getContext('2d').getImageData(0, 0, 32, 32).data;
     let palePixels = 0;
     for (let i = 0; i < hitPixels.length; i += 4) if (hitPixels[i] === 255 && hitPixels[i + 1] === 241 && hitPixels[i + 3] > 0) palePixels++;
-    return { damaged, singleHit, cleared, blocked, defeated, bossHit, reset, fullLeavesFlower, heals, hud, animation, initialShape,
+    return { damaged, singleHit, cleared, blocked, defeated, enemyHeal, bossHit, reset, fullLeavesFlower, heals, hud, animation, initialShape,
       distinctGround: new Set(hashes.slice(1, 5)).size, distinctAir: new Set(hashes.slice(6)).size, palePixels, atlas: canvas.toDataURL() };
   });
   assert.equal(result.damaged.hp, 1); assert(result.damaged.texture.endsWith('-hit'));
-  for (const key of ['singleHit', 'cleared', 'blocked', 'defeated', 'bossHit', 'reset', 'fullLeavesFlower', 'heals']) assert(result[key], key);
+  for (const key of ['singleHit', 'cleared', 'blocked', 'defeated', 'enemyHeal', 'bossHit', 'reset', 'fullLeavesFlower', 'heals']) assert(result[key], key);
   assert.equal(result.hud.healthSlots, 3); assert.equal(result.hud.label, 'Emblems 1/12');
   assert.deepEqual(result.animation.map(a => a.key), ['boco-peck0', 'boco-peck1', 'boco-peck2', 'boco-peck3']);
   for (const frame of result.animation) assert.deepEqual(frame.shape, result.initialShape);
@@ -83,5 +85,5 @@ try {
     await page.screenshot({ path: `qa/combat-feedback/${width}x${height}.png` });
   }
   assert.deepEqual(errors, []);
-  console.log('Combat feedback passed: damage vs armor, death/boss flash, reset, flower rules, labeled counter, four attack frames and unchanged body.');
+  console.log('Combat feedback passed: damage vs armor, enemy-earned health, death/boss flash, reset, rare flower rules, labeled counter, four attack frames and unchanged body.');
 } finally { await browser.close(); }

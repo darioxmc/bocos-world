@@ -48,10 +48,12 @@ class Play extends Phaser.Scene {
     this.glideToggled = false;
     this.deathUntil = 0;
     this.damageCount = 0;
+    this.combatHealingShown = false;
     this.maxHealth = maxHealthFor(this.save);
     this.health = this.maxHealth;
     this.attackVictims = new Set();
     this.springReady = 0;
+    this.springBoostUntil = 0;
     this.bossEngaged = false;
     this.bossDefeated = false;
     this.bossState = null;
@@ -343,7 +345,7 @@ class Play extends Phaser.Scene {
     this.updateWindStrikes();
     for (const seed of this.seeds.getChildren()) if (this.clock > seed.getData('expires') || seed.y > this.level.height + 60) seed.destroy();
     this.animatePlayer();
-    if (this.player.y > this.level.height + 45) this.die();
+    if (this.player.y > this.level.height + 45 || (this.player.body.blocked.down && this.player.body.bottom >= this.level.height - 1)) this.die();
     this.previousFeet = this.player.body.bottom;
     this.previousVelocityY = this.player.body.velocity.y;
     this.refreshHud();
@@ -393,7 +395,7 @@ class Play extends Phaser.Scene {
       this.coyoteUntil = 0;
       this.jumpBufferedUntil = 0;
     }
-    if (!controls.down('jump') && body.velocity.y < -150) body.setVelocityY(-150);
+    if (!controls.down('jump') && body.velocity.y < -150 && this.clock >= this.springBoostUntil) body.setVelocityY(-150);
     const direction = Number(controls.down('right')) - Number(controls.down('left'));
     if (this.clock >= this.hurtUntil) {
       body.setVelocityX(approach(body.velocity.x, direction * MOVE.speed * (crouching ? 0.35 : 1), dt * (direction ? MOVE.acceleration : MOVE.braking)));
@@ -426,6 +428,7 @@ class Play extends Phaser.Scene {
     this.player.setVelocityY(-365);
     this.coyoteUntil = 0;
     this.springReady = this.clock + 0.22;
+    this.springBoostUntil = this.clock + 0.44;
     this.gliding = false;
     audio.effect('spring');
   }
@@ -531,6 +534,17 @@ class Play extends Phaser.Scene {
   killEnemy(enemy) {
     const state = this.enemyData.get(enemy);
     if (!state || state.dead) return;
+    if (this.health < this.maxHealth) {
+      this.health++;
+      const wisp = this.add.image(enemy.x, enemy.y - 16, 'health-wisp').setDepth(10);
+      this.tweens.add({ targets: wisp, y: wisp.y - 22, alpha: 0, duration: 520, ease: 'Sine.easeOut', onComplete: () => wisp.destroy() });
+      audio.effect('enemy-heal');
+      this.refreshHud();
+      if (!this.combatHealingShown) {
+        this.combatHealingShown = true;
+        shell.showToast('Enemy defeated - health restored');
+      }
+    }
     state.dead = true;
     enemy.body.enable = false;
     enemy.setTexture(`${state.type}-hit`).clearTint();

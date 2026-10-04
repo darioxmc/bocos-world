@@ -644,6 +644,12 @@ function objects(scene) {
     polygon(ctx, '#fff4b0', [[6, 8], [11, 6], [18, 6], [21, 8], [18, 10], [11, 10]]);
     rect(ctx, '#ffffff', 11, 7, 8, 2);
   });
+  texture(scene, 'health-wisp', 12, 12, ctx => {
+    polygon(ctx, '#31564c', [[6, 0], [9, 2], [11, 6], [9, 10], [6, 12], [3, 10], [1, 6], [3, 2]]);
+    polygon(ctx, '#92df9a', [[6, 2], [8, 4], [9, 6], [7, 9], [5, 9], [3, 6], [4, 4]]);
+    rect(ctx, '#fff4b0', 5, 3, 2, 5);
+    rect(ctx, '#ffffff', 5, 3, 1, 2);
+  });
   texture(scene, 'checkpoint', 16, 32, ctx => {
     rect(ctx, '#463d43', 4, 2, 3, 29);
     rect(ctx, '#c59b6d', 5, 4, 1, 25);

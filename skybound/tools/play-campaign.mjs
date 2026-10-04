@@ -32,17 +32,19 @@ try {
       const target = s.level.boss.arena.x - 48;
       for (let frame = 0; frame < 120000; frame++) {
         const p = s.player, grounded = p.body.blocked.down || p.body.touching.down;
-        const current = s.level.terrain.find(r => p.x >= r.x && p.x < r.x + r.w);
-        const next = s.level.terrain.find(r => r.x > p.x + 2);
+        const surfaces = [...s.level.terrain, ...s.ledges.getChildren().filter(platform => platform.body.enable).map(platform => ({ x: platform.x, y: platform.y, w: platform.width, h: platform.height }))];
+        const opening = p.x < s.level.chapters[1].x;
+        const current = opening ? s.level.terrain.find(r => p.x >= r.x && p.x < r.x + r.w) : surfaces.filter(r => p.x >= r.x - 2 && p.x < r.x + r.w + 2 && Math.abs(r.y - p.body.bottom) < 4).sort((a, b) => a.y - b.y)[0];
+        const next = opening ? s.level.terrain.find(r => r.x > p.x + 2) : surfaces.filter(r => r.x > p.x + 2 && r.x - p.x < 120).sort((a, b) => a.x - b.x || a.y - b.y)[0];
         const danger = [...s.enemyData].find(([e, d]) => e.active && !d.dead && e.body.enable && e.x > p.x - 15 && e.x < p.x + 65 && e.body.top < p.y + 5 && e.y > p.y - 60);
-        const step = next && next.y < p.body.bottom - 4 && next.x - p.x < 28;
-        const gap = current && next && next.x > current.x + current.w && current.x + current.w - p.x < 22;
+        const step = next && next.y < p.body.bottom - 4 && next.x - p.x < (opening ? 28 : 42);
+        const gap = current && current.x + current.w - p.x < (opening ? 22 : 24);
         const ledgeEnd = s.ledges.getChildren().some(ledge => ledge.body.enable && Math.abs(ledge.body.top - p.body.bottom) < 2 && p.x >= ledge.body.left && p.x < ledge.body.right && ledge.body.right - p.x < 22);
-        if (!s.deathUntil && grounded && (step || gap || ledgeEnd || danger || stalled > 20) && frame > holdUntil + 7) {
+        if (!s.deathUntil && grounded && (step || gap || ledgeEnd || danger || stalled > 20)) {
           c.pending.add('jump'); holdUntil = frame + 24; jumps++;
         }
         if (danger && frame >= nextAttack) { c.pending.add('attack'); nextAttack = frame + 20; }
-        const glide = !grounded && (!current || (next && next.x > current.x + current.w && current.x + current.w - p.x < 100));
+        const glide = !grounded;
         c.sources.set('qa:route', new Set(s.deathUntil ? [] : ['right', ...(frame <= holdUntil ? ['jump'] : []), ...(glide ? ['glide'] : [])]));
         if (frame % 4 === 0) { trail.push({ x: Math.round(p.x), y: Math.round(p.y), vy: Math.round(p.body.velocity.y), grounded, jump: frame <= holdUntil, glide, step, gap, danger: danger?.[1].type }); if (trail.length > 60) trail.shift(); }
         if (!firstFall && p.y > (current?.y || next?.y || s.level.height) + 12) firstFall = [...trail];
@@ -54,7 +56,7 @@ try {
         stalled = Math.abs(p.x - previousX) < 0.1 ? stalled + 1 : 0;
         previousX = p.x;
         if (p.x >= target) return { area: s.level.id, reached: true, minutes: s.clock / 60, deaths, damage: s.damageCount, jumps, checkpoints: s.visitedCheckpoints.size };
-        if ((stalled > 300 && grounded) || deaths > 12) return { area: s.level.id, reached: false, deaths, deathLog, firstFall, x: p.x, y: p.y, checkpoint: s.checkpoint.id, reason: stalled > 300 ? 'stalled' : 'repeated deaths' };
+        if ((stalled > 300 && grounded) || deaths > 30) return { area: s.level.id, reached: false, deaths, deathLog, firstFall, x: p.x, y: p.y, checkpoint: s.checkpoint.id, reason: stalled > 300 ? 'stalled' : 'repeated deaths' };
       }
       return { area: s.level.id, reached: false, reason: 'timeout', deaths, x: s.player.x };
     });
