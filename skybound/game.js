@@ -1,6 +1,6 @@
 import { createArt, createBackdrop } from './art.js';
 import { LEVELS } from './levels.js';
-import { chapterAt } from './campaign.js';
+import { chapterAt, ROOST_EMBLEM_GOAL } from './campaign.js';
 import { InputController } from './input.js';
 import { Shell } from './shell.js';
 import { SaveStore } from './saves.js';
@@ -88,8 +88,7 @@ class Play extends Phaser.Scene {
     this.buildPickups();
     this.physics.add.overlap(this.player, this.pickups, (_player, pickup) => this.pickup(pickup));
     this.buildBoss();
-    this.cameras.main.startFollow(this.player, true, 0.14, 0.14, -35, 80);
-    this.cameras.main.setDeadzone(60, 55);
+    this.followPlayer();
     this.events.once('shutdown', () => {
       this.backdrop?.destroy();
       this.flushSave();
@@ -143,6 +142,11 @@ class Play extends Phaser.Scene {
       for (let y = gust.y; y < gust.y + gust.h; y += 32) strips.push(this.add.image(gust.x + gust.w / 2, y, 'gust').setAlpha(0.4).setDepth(2));
       return { ...gust, strips };
     });
+  }
+
+  followPlayer() {
+    this.cameras.main.startFollow(this.player, true, 0.14, 0.32, -35, 0);
+    this.cameras.main.setDeadzone(60, 20);
   }
 
   buildEnemies() {
@@ -211,11 +215,17 @@ class Play extends Phaser.Scene {
       audio.effect('flower');
     } else if (kind === 'emblem') {
       if (this.collected.has(id)) return;
+      const previous = Math.min(ROOST_EMBLEM_GOAL, this.collected.size);
       this.collected.add(id);
       sprite.setAlpha(0.25);
-      this.persist({ emblems: [...this.collected] });
+      const progress = Math.min(ROOST_EMBLEM_GOAL, this.collected.size);
+      const patch = { emblems: [...this.collected] };
+      if (progress >= ROOST_EMBLEM_GOAL && ['meadow', 'cliff', 'canopy'].every(area => this.save.defeated?.includes(area))) {
+        Object.assign(patch, { area: 3, checkpoint: null });
+      }
+      this.persist(patch);
       audio.effect('flower');
-      shell.showToast('Flower emblem found');
+      shell.showToast(previous < ROOST_EMBLEM_GOAL && progress >= ROOST_EMBLEM_GOAL ? 'High Roost unlocked' : `Sky Emblem ${progress}/${ROOST_EMBLEM_GOAL}`);
     } else if (kind === 'checkpoint') {
       if (this.visitedCheckpoints.has(id)) return;
       this.visitedCheckpoints.add(id);
@@ -276,6 +286,11 @@ class Play extends Phaser.Scene {
     if (this.mode === 'title') {
       this.clock += dt;
       this.player.setTexture(`boco-run${Math.floor(this.clock * 9) % 6}`);
+      return;
+    }
+    if (this.mode === 'boss-intro') {
+      this.clock += dt;
+      this.updateBossIntro();
       return;
     }
     if (this.mode === 'chapter') {
@@ -579,6 +594,45 @@ class Play extends Phaser.Scene {
     seed.setData('expires', this.clock + 4);
   }
 
+  startBossIntro() {
+    const spec = this.level.boss;
+    const arena = spec.arena;
+    const state = this.bossState;
+    this.bossEngaged = true;
+    this.mode = 'boss-intro';
+    state.phase = 'intro';
+    state.started = this.clock;
+    state.until = this.clock + 1.65;
+    state.targetX = this.player.x;
+    state.targetY = this.player.y - 10;
+    this.player.setVelocity(0, 0);
+    this.physics.pause();
+    controls.clear();
+    this.cameras.main.stopFollow();
+    this.cameras.main.pan((this.player.x + this.boss.x) / 2, arena.y + arena.h / 2, 850, 'Sine.easeInOut');
+    this.boss.setAlpha(0);
+    this.tweens.add({ targets: this.boss, alpha: 1, duration: 520, delay: 180, ease: 'Sine.easeOut' });
+    audio.startMusic(this.level.id, 6, 'boss');
+    audio.effect('boss');
+    shell.showToast(spec.name);
+  }
+
+  updateBossIntro() {
+    const state = this.bossState;
+    const key = this.bossAnimationTexture(this.level.boss.type, state);
+    this.boss.setTexture(key).setFlipX(this.player.x < this.boss.x);
+    if (this.clock < state.until) return;
+    state.phase = 'warn';
+    state.started = this.clock;
+    state.until = this.clock + 1.25;
+    this.mode = 'playing';
+    this.physics.resume();
+    this.cameras.main.setBounds(this.level.boss.arena.x, Math.max(0, this.level.boss.arena.y - 20), this.level.boss.arena.w, Math.max(240, this.level.boss.arena.h));
+    this.followPlayer();
+    controls.clear();
+    this.previousFeet = this.player.body.bottom;
+  }
+
   updateBoss(dt) {
     if (this.bossDefeated) return;
     const spec = this.level.boss;
@@ -588,14 +642,8 @@ class Play extends Phaser.Scene {
     if (!this.bossEngaged) {
       this.bossCue.setVisible(false);
       if (this.player.x < arena.x + 20) return;
-      this.bossEngaged = true;
-      state.phase = 'warn'; state.started = this.clock; state.until = this.clock + 1.45;
-      state.targetX = this.player.x;
-      state.targetY = this.player.y - 10;
-      this.cameras.main.setBounds(arena.x, Math.max(0, arena.y - 20), arena.w, Math.max(240, arena.h));
-      audio.startMusic(this.level.id, 6, 'boss');
-      audio.effect('boss');
-      shell.showToast(spec.name);
+      this.startBossIntro();
+      return;
     }
     const phase = state.hp <= 2 ? 3 : state.hp <= 4 ? 2 : 1;
     const minX = arena.x + 40, maxX = arena.x + arena.w - 38;
@@ -656,7 +704,7 @@ class Play extends Phaser.Scene {
   }
 
   bossAnimationTexture(type, state) {
-    const phase = state.phase === 'sleep' ? 'idle' : state.phase;
+    const phase = state.phase === 'sleep' || state.phase === 'intro' ? 'idle' : state.phase;
     const counts = { idle: 4, warn: 4, attack: 6, recover: 4, return: 4 };
     const count = counts[phase] || 4;
     const speed = phase === 'attack' ? 10 : phase === 'warn' ? 7 : 5;
@@ -675,7 +723,7 @@ class Play extends Phaser.Scene {
   bossContact() {
     if (!this.bossEngaged || this.bossDefeated || this.mode !== 'playing' || this.deathUntil) return;
     const stomping = isStomp(this.previousFeet, this.previousVelocityY, this.boss.body.top);
-    const dangerous = this.bossState.phase === 'attack' || this.bossState.phase === 'warn';
+    const dangerous = ['warn', 'attack', 'return'].includes(this.bossState.phase);
     if (stomping) {
       this.player.setVelocityY(controls.down('jump') ? -MOVE.jump : -225);
       if (this.bossState.phase === 'recover') this.hitBoss();
@@ -703,7 +751,8 @@ class Play extends Phaser.Scene {
     this.cameras.main.setBounds(0, 0, this.level.width, this.level.height);
     this.health = this.maxHealth;
     const defeated = [...new Set([...this.save.defeated, this.level.id])];
-    const nextArea = Math.min(3, this.areaIndex + 1);
+    const roostReady = ['meadow', 'cliff', 'canopy'].every(id => defeated.includes(id)) && this.collected.size >= ROOST_EMBLEM_GOAL;
+    const nextArea = this.areaIndex === 2 && !roostReady ? 2 : Math.min(3, this.areaIndex + 1);
     const patch = { defeated, health: this.health, completed: this.save.completed || this.areaIndex >= 2 };
     if (nextArea > this.save.area) Object.assign(patch, { area: nextArea, checkpoint: null });
     this.persist(patch);
@@ -763,9 +812,10 @@ const scene = () => game?.scene.getScene('Play');
 const begin = (slotIndex, area) => {
   const slot = SaveStore.get(slotIndex) || SaveStore.create(slotIndex);
   const target = area ?? slot.area;
-  if (target > slot.area || (target === 3 && !['meadow', 'cliff', 'canopy'].every((id) => slot.defeated.includes(id)))) {
+  const roostReady = ['meadow', 'cliff', 'canopy'].every(id => slot.defeated.includes(id)) && (slot.emblems?.length || 0) >= ROOST_EMBLEM_GOAL;
+  if ((target > slot.area && !(target === 3 && roostReady)) || (target === 3 && !roostReady)) {
     shell.showWorld(slotIndex);
-    shell.showToast('Restore the three gardens first'); return;
+    shell.showToast(`Restore three gardens and find ${ROOST_EMBLEM_GOAL} Sky Emblems`); return;
   }
   controls.clear();
   void audio.unlock();
@@ -807,5 +857,5 @@ window.addEventListener('pagehide', () => scene()?.flushSave());
 
 // Inspection hooks are available in the local preview for browser verification.
 if (['localhost', '127.0.0.1'].includes(location.hostname)) {
-  window.skybound = { game, get scene() { return scene(); }, saves: SaveStore, controls, audio };
+  window.skybound = { game, get scene() { return scene(); }, saves: SaveStore, controls, audio, get shell() { return shell; } };
 }

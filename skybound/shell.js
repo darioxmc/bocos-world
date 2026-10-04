@@ -1,5 +1,6 @@
 import { SaveStore } from './saves.js';
 import { LEVELS } from './levels.js';
+import { ROOST_EMBLEM_GOAL } from './campaign.js';
 import { ACTIONS, DEFAULT_BINDINGS, DEFAULT_PAD_BINDINGS, getGestureEnabled, setGestureEnabled, getLeftHanded, setLeftHanded } from './input.js';
 
 const node = (tag, className, text) => {
@@ -161,7 +162,8 @@ export class Shell {
         const area = LEVELS[slot.area]?.name || 'Skybound';
         const checkpoint = LEVELS[slot.area]?.checkpoints.find(point => point.id === slot.checkpoint);
         const summary = node('small', 'slot-summary');
-        for (const text of [area, `${slot.emblems?.length || 0} emblems`, `Time ${playtimeLabel(slot.playtime)}`, checkpoint?.name || (slot.checkpoint ? 'Checkpoint saved' : 'Area start'), ...(slot.completed ? ['Complete'] : [])]) summary.append(node('span', '', text), document.createTextNode(' '));
+        const emblems = Math.min(ROOST_EMBLEM_GOAL, slot.emblems?.length || 0);
+        for (const text of [area, `${emblems}/${ROOST_EMBLEM_GOAL} emblems`, `Time ${playtimeLabel(slot.playtime)}`, checkpoint?.name || (slot.checkpoint ? 'Checkpoint saved' : 'Area start'), ...(slot.completed ? ['Complete'] : [])]) summary.append(node('span', '', text), document.createTextNode(' '));
         main.append(summary);
       } else main.append(node('small', '', 'Empty'));
       const tools = node('div', 'slot-tools');
@@ -245,12 +247,14 @@ export class Shell {
     const menu = this.open('world', 'Choose an Area');
     menu.append(node('p', 'eyebrow', saved.name));
     const stack = node('div', 'menu-stack');
-    const roostUnlocked = ['meadow', 'cliff', 'canopy'].every(id => saved.defeated?.includes(id));
+    const restored = ['meadow', 'cliff', 'canopy'].every(id => saved.defeated?.includes(id));
+    const emblemCount = Math.min(ROOST_EMBLEM_GOAL, saved.emblems?.length || 0);
+    const roostUnlocked = restored && emblemCount >= ROOST_EMBLEM_GOAL;
     const resume = this.button('Continue', () => this.start(index), 'primary');
     resume.disabled = saved.area === 3 && !roostUnlocked;
     stack.append(resume);
     LEVELS.forEach((level, levelIndex) => {
-      const unlocked = levelIndex <= saved.area && (levelIndex !== 3 || roostUnlocked);
+      const unlocked = levelIndex === 3 ? roostUnlocked : levelIndex <= saved.area;
       const beaten = saved.defeated?.includes(level.id);
       const button = this.button('', () => this.start(index, levelIndex), 'world-row');
       const copy = node('span');
@@ -261,6 +265,7 @@ export class Shell {
       stack.append(button);
     });
     menu.append(stack);
+    if (!roostUnlocked) menu.append(node('p', 'menu-note', `High Roost: restore all three gardens and collect ${ROOST_EMBLEM_GOAL} Sky Emblems. Progress ${emblemCount}/${ROOST_EMBLEM_GOAL}.`));
     const actions = node('div', 'menu-actions');
     actions.append(this.button('Saves', () => this.showSlots()), this.button('Settings', () => this.showSettings(() => this.showWorld(index))));
     menu.append(actions);
@@ -301,8 +306,8 @@ export class Shell {
     this.activeSlot = index;
     const menu = this.open('victory', isFinal ? 'The Sky Is Open' : 'Area Clear');
     menu.append(node('div', 'victory-symbol', '★'), node('p', 'story-copy', `${LEVELS[levelIndex]?.name || 'Area'} restored.`));
-    const count = SaveStore.get(index)?.emblems?.length || 0;
-    menu.append(node('p', 'menu-note', `${count} emblems collected`));
+    const count = Math.min(ROOST_EMBLEM_GOAL, SaveStore.get(index)?.emblems?.length || 0);
+    menu.append(node('p', 'menu-note', `${count}/${ROOST_EMBLEM_GOAL} Sky Emblems toward the High Roost`));
     const actions = node('div', 'menu-actions');
     actions.append(this.button(isFinal ? 'Continue' : 'Next Area', () => isFinal ? this.showEnding(index) : this.start(index, Math.min(levelIndex + 1, LEVELS.length - 1)), 'primary'), this.button('Areas', () => this.showWorld(index)));
     menu.append(actions);
@@ -499,11 +504,11 @@ export class Shell {
       flowers.dataset.health = `${current}/${maximum}`;
     }
     flowers.setAttribute('aria-label', `Health ${current} of ${maximum}`);
-    const emblemCount = Array.isArray(emblems) ? emblems.length : emblems ?? 0;
+    const emblemCount = Math.min(ROOST_EMBLEM_GOAL, Array.isArray(emblems) ? emblems.length : emblems ?? 0);
     const emblemCounter = document.getElementById('hud-emblems');
-    emblemCounter.textContent = `Emblems ${emblemCount}`;
-    emblemCounter.setAttribute('aria-label', `${emblemCount} flower emblems collected`);
-    emblemCounter.title = 'Flower emblems collected';
+    emblemCounter.textContent = `Emblems ${emblemCount}/${ROOST_EMBLEM_GOAL}`;
+    emblemCounter.setAttribute('aria-label', `${emblemCount} of ${ROOST_EMBLEM_GOAL} Sky Emblems collected`);
+    emblemCounter.title = `${ROOST_EMBLEM_GOAL} Sky Emblems unlock the High Roost`;
     const boss = document.getElementById('hud-boss');
     boss.hidden = !bossName || !(bossMax > 0);
     document.getElementById('hud-boss-name').textContent = bossName || '';

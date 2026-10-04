@@ -38,13 +38,15 @@ test('spawn points, healing and checkpoints have floor support, and identifiers 
   const ids = new Set();
   for (const level of LEVELS) {
     const supported = point => [...level.terrain, ...level.platforms].some(rect => point.x >= rect.x && point.x < rect.x + rect.w && point.y === rect.y);
+    const nearSurface = point => [...level.terrain, ...level.platforms].some(rect => point.x >= rect.x && point.x < rect.x + rect.w && rect.y - point.y >= 0 && rect.y - point.y <= 24);
     for (const key of ['enemies', 'flowers', 'emblems', 'checkpoints']) {
       for (const point of level[key]) {
         assert(!ids.has(point.id), `duplicate ${point.id}`);
         ids.add(point.id);
         assert(point.id.length <= 80);
         assert(Number.isFinite(point.x) && Number.isFinite(point.y), point.id);
-        if (!(key === 'enemies' && ['bird', 'moth'].includes(point.type))) assert(supported(point), `${point.id} has no support`);
+        if (key === 'emblems') assert(nearSurface(point), `${point.id} is not reachable from a surface`);
+        else if (!(key === 'enemies' && ['bird', 'moth'].includes(point.type))) assert(supported(point), `${point.id} has no support`);
       }
     }
     for (const chapter of level.chapters?.slice(1, -1) || []) {
@@ -56,5 +58,6 @@ test('spawn points, healing and checkpoints have floor support, and identifiers 
     const bossCheckpoint = level.checkpoints.find(point => point.id.endsWith('-boss'));
     assert(bossCheckpoint && bossCheckpoint.x < level.boss.arena.x && level.boss.arena.x - bossCheckpoint.x <= 160);
   }
+  for (const level of LEVELS.slice(0, 3)) assert.equal(level.emblems.length, 7, `${level.id}: expected one opening emblem and one per act`);
   assert(LEVELS.reduce((sum, level) => sum + level.emblems.length, 0) <= 256, 'collectibles fit the save validator');
 });

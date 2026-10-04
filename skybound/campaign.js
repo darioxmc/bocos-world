@@ -1,6 +1,7 @@
 // Authored room sequences. Coordinates are local pixels; rises are relative to
 // the area's floor. Required routes never depend on lifts or wind timing.
 const ROOM_WIDTH = 1024;
+export const ROOST_EMBLEM_GOAL = 12;
 const ROOMS = {
   terraces: {
     ground: [[0, 192, 0], [192, 160, 16], [352, 160, 48], [512, 160, 16], [672, 352, 0]],
@@ -121,6 +122,9 @@ export function extendLevel(original) {
   if (!CHAPTERS[original.id]) return original;
   const level = structuredClone(original);
   level.springs = level.springs || [];
+  // Keep one demanding emblem in each area's opening route. The six acts add
+  // one apiece, replacing the old one-per-room shower of collectibles.
+  level.emblems = level.emblems.slice(-1);
   const insertAt = level.terrain.at(-1).x;
   const floor = level.terrain.at(-1).y;
   const length = CHAPTERS[level.id].reduce((sum, [, rooms]) => sum + rooms.length * ROOM_WIDTH, 0);
@@ -183,7 +187,9 @@ export function extendLevel(original) {
       // Healing follows the encounter on the required path in either direction.
       const healingX = cursor + 960;
       level.flowers.push({ id: `${id}-flower`, x: healingX, y: surface(healingX) });
-      level.emblems.push({ id: `${id}-emblem`, x: pointX(room.prize[0]), y: floor - room.prize[1] });
+      if (roomIndex === 4) {
+        level.emblems.push({ id: `${chapterId}-emblem`, x: pointX(room.prize[0]), y: floor - room.prize[1] - 16 });
+      }
       if ([0, 3, 6].includes(roomIndex)) {
         const x = cursor + 80;
         level.checkpoints.push({ id: `${id}-checkpoint`, name: `${name} ${Math.floor(roomIndex / 3) + 1}/3`, x, y: surface(x) });
