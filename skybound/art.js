@@ -1069,12 +1069,17 @@ function createSceneryTextures(scene) {
   }
 }
 
-function rollingRidge(ctx, y, shape, colors) {
+function ridgeHeightAt(x, y, shape) {
+  const wrappedX = ((x % BG_WIDTH) + BG_WIDTH) % BG_WIDTH;
   const step = BG_WIDTH / (shape.length - 1);
+  const section = Math.min(shape.length - 2, Math.floor(wrappedX / step));
+  const fraction = wrappedX / step - section;
+  return Math.floor(y + shape[section] * (1 - fraction) + shape[section + 1] * fraction);
+}
+
+function rollingRidge(ctx, y, shape, colors) {
   for (let x = 0; x < BG_WIDTH; x++) {
-    const section = Math.min(shape.length - 2, Math.floor(x / step));
-    const fraction = x / step - section;
-    const height = Math.floor(y + shape[section] * (1 - fraction) + shape[section + 1] * fraction);
+    const height = ridgeHeightAt(x, y, shape);
     rect(ctx, colors[0], x, height, 1, BG_HEIGHT - height);
     rect(ctx, colors[1], x, height, 1, 2);
     if (x % 13 < 4) rect(ctx, colors[1], x, height + 6 + (x % 5), 1, 1);
@@ -1126,12 +1131,14 @@ function tree(ctx, x, y, size, colors) {
 
 function meadowMiddle(ctx) {
   const p = THEMES.meadow;
-  for (const [x, y, s] of [[-18, 150, 1], [60, 158, 1], [151, 137, 1],
-    [260, 160, 1], [372, 146, 1], [453, 141, 1]]) {
+  const ridgeY = 222;
+  const ridgeShape = [0, -4, -10, -13, -10, -3, 5, 7, 0, -9, -15, -13,
+    -5, 7, 14, 12, 5, -4, -10, -12, -6, 3, 6, 4, 0];
+  for (const [x, s] of [[-18, 1], [60, 1], [151, 1], [260, 1], [372, 1], [453, 1]]) {
+    const y = ridgeHeightAt(x + 24 * s, ridgeY, ridgeShape) - 50 * s;
     wrapped(ctx, x, 47 * s, (c, xx) => tree(c, xx, y, s, p.middle));
   }
-  rollingRidge(ctx, 222, [0, -4, -10, -13, -10, -3, 5, 7, 0, -9, -15, -13,
-    -5, 7, 14, 12, 5, -4, -10, -12, -6, 3, 6, 4, 0], p.middle);
+  rollingRidge(ctx, ridgeY, ridgeShape, p.middle);
   polygon(ctx, '#78a58a', [[0, 255], [56, 243], [111, 248], [161, 240], [212, 251],
     [246, 269], [294, 279], [349, 270], [403, 263], [460, 251], [512, 255], [512, 384], [0, 384]]);
   for (const [x, y] of [[22, 240], [78, 234], [178, 227], [289, 246], [397, 232], [475, 242]]) {
