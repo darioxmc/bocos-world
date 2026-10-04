@@ -18,6 +18,7 @@ try {
   await page.waitForFunction(() => window.skybound?.scene?.player, { timeout: 15000 });
   await page.screenshot({ path: 'qa/desktop-title.png', fullPage: true });
   console.log('Title:', await page.locator('#overlay').innerText());
+  if (await page.getByRole('button', { name: 'Start', exact: true }).count()) await page.getByRole('button', { name: 'Start', exact: true }).click();
   await page.getByRole('button', { name: 'Play', exact: true }).click();
   console.log('Slots:', await page.locator('#overlay').innerText());
   await page.screenshot({ path: 'qa/desktop-slots.png', fullPage: true });
@@ -158,6 +159,7 @@ try {
   await phone.goto('http://127.0.0.1:8770/',{waitUntil:'networkidle'});
   await phone.waitForFunction(()=>window.skybound?.scene?.player);
   await phone.screenshot({path:'qa/iphone14-title.png',fullPage:true});
+  if (await phone.getByRole('button',{name:'Start',exact:true}).count()) await phone.getByRole('button',{name:'Start',exact:true}).tap();
   await phone.getByRole('button',{name:'Play',exact:true}).click();
   await phone.locator('.slot-main').first().click();
   await phone.getByRole('button',{name:'Skip',exact:true}).click();

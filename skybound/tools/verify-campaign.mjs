@@ -117,6 +117,7 @@ try {
     await page.evaluate(p => { const s = skybound.scene; s.player.body.reset(p.x, p.y); s.previousFeet = p.y; }, point);
     await page.waitForFunction(id => skybound.saves.get(0).checkpoint === id, point.id);
     await page.reload({ waitUntil: 'networkidle' });
+    if (await page.getByRole('button', { name: 'Start', exact: true }).count()) await page.getByRole('button', { name: 'Start', exact: true }).click();
     await page.getByRole('button', { name: 'Play', exact: true }).click();
     check((await page.locator('.slot-main').first().innerText()).includes(point.name), `saved chapter name in slot ${area}`);
     await page.screenshot({ path: path.join(out, `saved-slot-${area}.png`), fullPage: true });

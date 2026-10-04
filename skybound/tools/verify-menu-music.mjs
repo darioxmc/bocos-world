@@ -23,9 +23,10 @@ try {
   }));
   assert.equal(queued.mode, 'title');
   assert.equal(queued.area, 0);
-  assert.equal(queued.timer, null);
+  if (queued.context === 'running') assert.notEqual(queued.timer, null);
 
-  await page.locator('.wordmark').click();
+  const start = page.getByRole('button', { name: 'Start', exact: true });
+  if (await start.count()) await start.click(); else await page.locator('.wordmark').click();
   await page.waitForFunction(() => skybound.audio._musicMode === 'title' && skybound.audio.context?.state === 'running' && skybound.audio._timer !== null);
   const sounding = await page.evaluate(async () => {
     const audio = skybound.audio;
@@ -64,7 +65,7 @@ try {
   await page.getByRole('button', { name: 'Back', exact: true }).click();
   await page.waitForFunction(() => skybound.audio._musicMode === 'title' && skybound.audio._timer !== null);
   assert.deepEqual(errors, []);
-  console.log(`Title fanfare and menu music passed: title queued before gesture, audible at RMS ${sounding.rms.toFixed(4)}, and cleanly hand off through level music.`);
+  console.log(`Title fanfare and menu music passed: ${queued.context === 'running' ? 'autoplay began immediately' : 'blocked autoplay resumed on first gesture'}, audible at RMS ${sounding.rms.toFixed(4)}, and cleanly hand off through level music.`);
 } finally {
   await browser.close();
 }

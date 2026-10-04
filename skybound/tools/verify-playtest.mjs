@@ -85,6 +85,7 @@ try {
   const touch = await phone.newPage();
   touch.on('pageerror', error => errors.push(error.message));
   await touch.goto(base, { waitUntil: 'networkidle' });
+  if (await touch.getByRole('button', { name: 'Start', exact: true }).count()) await touch.getByRole('button', { name: 'Start', exact: true }).tap();
   await touch.getByRole('button', { name: 'Play', exact: true }).tap();
   await touch.getByRole('button', { name: '1 New Game Empty' }).tap();
   await touch.getByRole('button', { name: 'Skip', exact: true }).tap();

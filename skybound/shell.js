@@ -49,13 +49,14 @@ const playtimeLabel = value => {
 };
 
 export class Shell {
-  constructor({onStart, onResume, onRestart, onExit, onSettings} = {}) {
-    this.callbacks = {onStart, onResume, onRestart, onExit, onSettings};
+  constructor({onStart, onTitleStart, onResume, onRestart, onExit, onSettings} = {}) {
+    this.callbacks = {onStart, onTitleStart, onResume, onRestart, onExit, onSettings};
     this.overlay = document.getElementById('overlay');
     this.hud = document.getElementById('hud');
     this.toast = document.getElementById('toast');
     this.chapterCard = document.getElementById('chapter-card');
     this.activeSlot = null;
+    this.titleStarted = false;
     this.view = '';
     this.capture = null;
     this.settings = SaveStore.getSettings();
@@ -139,8 +140,18 @@ export class Shell {
     heading.append(node('small', '', 'SKYBOUND'));
     menu.append(heading);
     const actions = node('div', 'menu-actions');
-    actions.append(this.button('Play', () => this.showSlots(), 'primary'), this.button('Settings', () => this.showSettings(() => this.showTitle(), false)));
+    if (this.titleStarted) actions.append(this.button('Play', () => this.showSlots(), 'primary'));
+    else actions.append(this.button('Start', async () => {
+      await this.invoke('onTitleStart');
+      this.startTitle();
+    }, 'primary'));
+    actions.append(this.button('Settings', () => this.showSettings(() => this.showTitle(), false)));
     menu.append(actions);
+  }
+  startTitle() {
+    if (this.titleStarted) return;
+    this.titleStarted = true;
+    if (this.view === 'title') this.showTitle();
   }
   showSlots() {
     const menu = this.open('slots', 'Choose a Save');
