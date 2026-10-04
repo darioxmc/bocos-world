@@ -265,7 +265,7 @@ export class Shell {
       stack.append(button);
     });
     menu.append(stack);
-    if (!roostUnlocked) menu.append(node('p', 'menu-note', `High Roost: restore all three gardens and collect ${ROOST_EMBLEM_GOAL} Sky Emblems. Progress ${emblemCount}/${ROOST_EMBLEM_GOAL}.`));
+    if (!roostUnlocked) menu.append(node('p', 'menu-note', `Sky Emblems: 4 and 8 restore Heart Flowers. Find all ${ROOST_EMBLEM_GOAL} and restore three gardens to open High Roost. Progress ${emblemCount}/${ROOST_EMBLEM_GOAL}.`));
     const actions = node('div', 'menu-actions');
     actions.append(this.button('Saves', () => this.showSlots()), this.button('Settings', () => this.showSettings(() => this.showWorld(index))));
     menu.append(actions);
@@ -307,7 +307,8 @@ export class Shell {
     const menu = this.open('victory', isFinal ? 'The Sky Is Open' : 'Area Clear');
     menu.append(node('div', 'victory-symbol', '★'), node('p', 'story-copy', `${LEVELS[levelIndex]?.name || 'Area'} restored.`));
     const count = Math.min(ROOST_EMBLEM_GOAL, SaveStore.get(index)?.emblems?.length || 0);
-    menu.append(node('p', 'menu-note', `${count}/${ROOST_EMBLEM_GOAL} Sky Emblems toward the High Roost`));
+    menu.append(node('p', 'menu-note', count >= ROOST_EMBLEM_GOAL ? 'All Sky Emblems found - the High Roost seal is restored' :
+      `${count}/${ROOST_EMBLEM_GOAL} Sky Emblems - 4 and 8 restore Heart Flowers`));
     const actions = node('div', 'menu-actions');
     actions.append(this.button(isFinal ? 'Continue' : 'Next Area', () => isFinal ? this.showEnding(index) : this.start(index, Math.min(levelIndex + 1, LEVELS.length - 1)), 'primary'), this.button('Areas', () => this.showWorld(index)));
     menu.append(actions);
@@ -489,7 +490,7 @@ export class Shell {
   updateHud(state) {
     if (this.hudState && Object.keys(state).every(key => state[key] === this.hudState[key])) return;
     this.hudState = { ...state };
-    const {area, health, maxHealth, emblems, bossName, bossHealth, bossMax, gliding} = state;
+    const {area, health, maxHealth, emblems, bossName, bossHealth, bossMax, bossVulnerable, gliding} = state;
     document.getElementById('hud-area').textContent = area ?? '';
     const maximum = Math.max(0, Math.min(12, Number(maxHealth) || 3));
     const current = Math.max(0, Math.min(maximum, Number(health) || 0));
@@ -508,10 +509,11 @@ export class Shell {
     const emblemCounter = document.getElementById('hud-emblems');
     emblemCounter.textContent = `Emblems ${emblemCount}/${ROOST_EMBLEM_GOAL}`;
     emblemCounter.setAttribute('aria-label', `${emblemCount} of ${ROOST_EMBLEM_GOAL} Sky Emblems collected`);
-    emblemCounter.title = `${ROOST_EMBLEM_GOAL} Sky Emblems unlock the High Roost`;
+    emblemCounter.title = `4 and 8 restore Heart Flowers; ${ROOST_EMBLEM_GOAL} unlock the High Roost`;
     const boss = document.getElementById('hud-boss');
     boss.hidden = !bossName || !(bossMax > 0);
-    document.getElementById('hud-boss-name').textContent = bossName || '';
+    boss.classList.toggle('vulnerable', Boolean(bossVulnerable));
+    document.getElementById('hud-boss-name').textContent = bossName ? `${bossName}${bossVulnerable ? ' - OPEN' : ''}` : '';
     const meter = document.getElementById('hud-boss-meter');
     meter.max = Math.max(1, Number(bossMax) || 1); meter.value = Math.max(0, Number(bossHealth) || 0);
     document.getElementById('hud-glide').hidden = !gliding;

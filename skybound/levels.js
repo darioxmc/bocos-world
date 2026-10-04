@@ -462,10 +462,7 @@ const BASE_LEVELS = [
       { id: 'roost-flower-last-rest', x: 1344, y: 208 },
       { id: 'roost-flower-boss-rest', x: 1520, y: 208 },
     ],
-    emblems: [
-      { id: 'roost-emblem-first-star', x: 512, y: 80 },
-      { id: 'roost-emblem-second-star', x: 1120, y: 80 },
-    ],
+    emblems: [],
     checkpoints: [
       { id: 'roost-checkpoint-first-perch', x: 256, y: 208 },
       { id: 'roost-checkpoint-gap-exit', x: 1024, y: 208 },

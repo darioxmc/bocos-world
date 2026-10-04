@@ -264,6 +264,7 @@ export class AudioEngine {
       case 'checkpoint': tone(midi(72), 0.24, 0.13, 'triangle'); tone(midi(76), 0.22, 0.11, 'triangle', null, 0.06); tone(midi(79), 0.28, 0.12, 'square', null, 0.12); break;
       case 'chapter': tone(midi(67), 0.13, 0.12, 'triangle'); tone(midi(72), 0.18, 0.12, 'square', null, 0.08); tone(midi(79), 0.26, 0.1, 'triangle', null, 0.16); break;
       case 'boss': tone(82, 0.35, 0.23, 'sawtooth', 41); tone(123, 0.3, 0.12, 'square', 61); noise(0.2, 0.13, 250); break;
+      case 'opening': tone(midi(72), 0.12, 0.14, 'triangle'); tone(midi(79), 0.2, 0.13, 'square', null, 0.07); break;
       case 'win': tone(midi(72), 0.3, 0.14); tone(midi(76), 0.32, 0.12, 'triangle', null, 0.06); tone(midi(79), 0.38, 0.11, 'square', null, 0.12); tone(midi(84), 0.5, 0.12, 'triangle', null, 0.16); break;
       case 'menu': tone(620, 0.065, 0.12, 'triangle', 930); break;
     }

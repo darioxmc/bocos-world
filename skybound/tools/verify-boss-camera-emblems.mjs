@@ -73,6 +73,51 @@ try {
   assert(Math.abs(cameraPositions[0].screenY - cameraPositions[1].screenY) <= 24, JSON.stringify(cameraPositions));
   await page.screenshot({ path: 'qa/boss-camera-emblems/cliff-camera-phone.png', fullPage: true });
 
+  const bossSignal = await page.evaluate(() => {
+    const s = skybound.scene;
+    s.bossEngaged = true;
+    s.bossDefeated = false;
+    s.bossState.openingShown = false;
+    s.bossRecover(1.5);
+    s.updateBoss(1 / 60);
+    s.refreshHud();
+    const open = {
+      cue: s.bossOpenCue.visible,
+      label: document.querySelector('#hud-boss-name').textContent,
+      className: document.querySelector('#hud-boss').className,
+    };
+    s.cameras.main.stopFollow();
+    s.cameras.main.centerOn(s.boss.x, s.boss.y - 50);
+    return open;
+  });
+  assert(bossSignal.cue && bossSignal.label.endsWith(' - OPEN') && bossSignal.className.includes('vulnerable'));
+  await page.waitForTimeout(120);
+  await page.screenshot({ path: 'qa/boss-camera-emblems/galeweaver-open-phone.png', fullPage: true });
+
+  const textureReport = await page.evaluate(async () => {
+    const { LEVELS } = await import('/levels.js');
+    const counts = { idle: 4, warn: 4, attack: 6, recover: 4, return: 4 };
+    const missing = [];
+    for (const type of new Set(LEVELS.map(level => level.boss.type))) {
+      for (const [phase, count] of Object.entries(counts)) for (let frame = 0; frame < count; frame++) {
+        const suffixes = phase === 'recover' ? ['', '-hit'] : [''];
+        for (const suffix of suffixes) {
+          const key = `boss-${type}-${phase}${frame}${suffix}`;
+          if (!skybound.scene.textures.exists(key)) missing.push(key);
+        }
+      }
+    }
+    const s = skybound.scene;
+    Object.assign(s.bossState, { phase: 'recover', until: s.clock, started: s.clock - 0.1,
+      flashUntil: s.clock + 0.2, hitUntil: s.clock + 0.2 });
+    s.updateBoss(1 / 60);
+    return { missing, phase: s.bossState.phase, texture: s.boss.texture.key,
+      textureExists: s.textures.exists(s.boss.texture.key), cue: s.bossOpenCue.visible };
+  });
+  assert.deepEqual(textureReport.missing, []);
+  assert(textureReport.phase === 'return' && textureReport.texture.endsWith('-hit') && textureReport.textureExists && !textureReport.cue,
+    JSON.stringify(textureReport));
+
   const emblemReport = await page.evaluate(async () => {
     const { LEVELS } = await import('/levels.js');
     const counts = LEVELS.map(level => level.emblems.length);
@@ -85,13 +130,32 @@ try {
     skybound.saves.save(0, { emblems: Array.from({ length: 12 }, (_, i) => `legacy-${i}`) });
     skybound.shell.showWorld(0);
     const unlocked = !row().disabled;
-    return { counts, hud, locked, unlocked, note: document.querySelector('.menu-note')?.textContent || '' };
+    const s = skybound.scene;
+    const first = s.pickups.getChildren().find(pickup => pickup.getData('kind') === 'emblem');
+    s.save = skybound.saves.save(0, { emblems: ['legacy-0', 'legacy-1', 'legacy-2'], assists: { extraHealth: false } });
+    s.collected = new Set(s.save.emblems); s.maxHealth = 3; s.health = 2; s.pickup(first);
+    const firstBlessing = { max: s.maxHealth, health: s.health, active: first.active };
+    const second = s.pickups.getChildren().find(pickup => pickup.active && pickup.getData('kind') === 'emblem');
+    s.save = skybound.saves.save(0, { defeated: ['meadow', 'cliff', 'canopy'],
+      emblems: Array.from({ length: 11 }, (_, i) => `legacy-${i}`), assists: { extraHealth: false } });
+    s.collected = new Set(s.save.emblems); s.maxHealth = 4; s.health = 2; s.pickup(second); s.refreshHud();
+    const completion = { max: s.maxHealth, health: s.health,
+      remaining: s.pickups.getChildren().filter(pickup => pickup.active && pickup.getData('kind') === 'emblem').length,
+      hud: document.querySelector('#hud-emblems').textContent };
+    return { counts, hud, locked, unlocked, firstBlessing, completion, note: document.querySelector('.menu-note')?.textContent || '' };
   });
-  assert.deepEqual(emblemReport.counts, [7, 7, 7, 2]);
+  assert.deepEqual(emblemReport.counts, [4, 4, 4, 0]);
   assert.equal(emblemReport.hud, 'Emblems 5/12');
   assert(emblemReport.locked && emblemReport.unlocked);
+  assert.deepEqual(emblemReport.firstBlessing, { max: 4, health: 4, active: false });
+  assert.deepEqual(emblemReport.completion, { max: 5, health: 5, remaining: 0, hud: 'Emblems 12/12' });
+  await page.evaluate(() => skybound.scene.scene.restart({ slot: 0, area: 1 }));
+  await page.waitForFunction(() => skybound.scene.areaIndex === 1 && skybound.scene.mode === 'playing');
+  const completedReload = await page.evaluate(() => ({ max: skybound.scene.maxHealth,
+    emblems: skybound.scene.pickups.getChildren().filter(pickup => pickup.getData('kind') === 'emblem').length }));
+  assert.deepEqual(completedReload, { max: 5, emblems: 0 });
   assert.deepEqual(errors, []);
-  console.log('Boss reveal, return damage, vertical camera centering, 12-emblem Roost gate, and reduced collectible counts passed.');
+  console.log('Boss reveal, complete damage frames, OPEN signal, vertical camera, exact 12-emblem economy, health blessings, and Roost gate passed.');
 } finally {
   await browser.close();
 }

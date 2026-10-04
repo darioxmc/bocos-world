@@ -16,10 +16,13 @@ opening index.html directly.
 
 Three handcrafted areas, six ordinary enemy types, an area boss in each, and
 an unlockable fourth area and final encounter. Jump, peck, stomp, glide, ride
-moving platforms, collect flower emblems, and restore the gardens. Flowers
+moving platforms, collect Sky Emblems, and restore the gardens. Flowers
 heal without granting invulnerability. Damage turns Boco's white center red.
 Healing flowers remain available when health is full. The separately labeled
-Emblems counter tracks collectible flower emblems, not another health slot.
+Emblems counter tracks twelve optional challenges: the fourth and eighth add
+a Heart Flower, while all twelve help unlock High Roost. Completed emblems do
+not respawn. Bosses signal their vulnerable recovery with an arrow, chime, and
+an `OPEN` state in the boss meter.
 Attacks animate Boco's whole head; actual enemy damage uses Canvas-compatible
 sprite flashes, including on bosses, without adding particles or changing reach.
 Checkpoints and unlimited retries keep the game approachable.

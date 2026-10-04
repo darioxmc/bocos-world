@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { LEVELS } from '../levels.js';
-import { chapterAt } from '../campaign.js';
+import { chapterAt, ROOST_EMBLEM_GOAL } from '../campaign.js';
 import { MOVE } from '../mechanics.js';
 
 test('main campaign has over twenty minutes of travel without bosses or optional detours', () => {
@@ -58,6 +58,7 @@ test('spawn points, healing and checkpoints have floor support, and identifiers 
     const bossCheckpoint = level.checkpoints.find(point => point.id.endsWith('-boss'));
     assert(bossCheckpoint && bossCheckpoint.x < level.boss.arena.x && level.boss.arena.x - bossCheckpoint.x <= 160);
   }
-  for (const level of LEVELS.slice(0, 3)) assert.equal(level.emblems.length, 7, `${level.id}: expected one opening emblem and one per act`);
-  assert(LEVELS.reduce((sum, level) => sum + level.emblems.length, 0) <= 256, 'collectibles fit the save validator');
+  for (const level of LEVELS.slice(0, 3)) assert.equal(level.emblems.length, 4, `${level.id}: expected four meaningful emblems`);
+  assert.deepEqual(LEVELS.map(level => level.emblems.length), [4, 4, 4, 0]);
+  assert.equal(LEVELS.reduce((sum, level) => sum + level.emblems.length, 0), ROOST_EMBLEM_GOAL, 'the world contains exactly the required emblems');
 });

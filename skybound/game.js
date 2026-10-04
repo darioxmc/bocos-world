@@ -16,6 +16,9 @@ controls.bind();
 let shell;
 let game;
 const bodyRect = (object) => ({ x: object.body.x, y: object.body.y, width: object.body.width, height: object.body.height });
+const emblemCount = (save) => Math.min(ROOST_EMBLEM_GOAL, save?.emblems?.length || 0);
+const maxHealthFor = (save) => Math.max(save?.assists?.extraHealth ? 5 : 3,
+  3 + Math.min(2, Math.floor(emblemCount(save) / 4)));
 
 class Play extends Phaser.Scene {
   constructor() { super('Play'); }
@@ -44,7 +47,7 @@ class Play extends Phaser.Scene {
     this.glideToggled = false;
     this.deathUntil = 0;
     this.damageCount = 0;
-    this.maxHealth = this.save?.assists.extraHealth ? 5 : 3;
+    this.maxHealth = maxHealthFor(this.save);
     this.health = this.maxHealth;
     this.attackVictims = new Set();
     this.springReady = 0;
@@ -167,11 +170,12 @@ class Play extends Phaser.Scene {
       const sprite = this.pickups.create(point.x, point.y, key).setOrigin(0.5, 1).setDepth(5);
       sprite.refreshBody();
       sprite.setData('kind', kind).setData('id', point.id);
-      if (kind === 'emblem' && this.collected.has(point.id)) sprite.setAlpha(0.25);
       return sprite;
     };
     for (const point of this.level.flowers) add(point, 'flower', 'flower');
-    for (const point of this.level.emblems) add(point, 'emblem', 'emblem');
+    if (this.collected.size < ROOST_EMBLEM_GOAL) {
+      for (const point of this.level.emblems) if (!this.collected.has(point.id)) add(point, 'emblem', 'emblem');
+    }
     for (const point of this.level.checkpoints) {
       const sprite = add(point, 'checkpoint', 'checkpoint');
       if (point.id === this.checkpoint.id) { this.visitedCheckpoints.add(point.id); sprite.setTint(0xffed88); }
@@ -184,8 +188,10 @@ class Play extends Phaser.Scene {
     this.boss = this.physics.add.sprite(spec.x, spec.y, `boss-${spec.type}`).setOrigin(0.5, 1).setDepth(7);
     const width = spec.type === 'moth' ? 20 : spec.type === 'bird' ? 38 : 46;
     this.boss.body.setSize(width, 44).setOffset((64 - width) / 2, 20).setAllowGravity(false).setImmovable(true);
-    this.bossState = { hp: 6, max: 6, phase: 'sleep', until: 0, started: 0, facing: -1, hitUntil: 0, targetX: 0, targetY: 0, volley: 0 };
+    this.bossState = { hp: 6, max: 6, phase: 'sleep', until: 0, started: 0, facing: -1, hitUntil: 0,
+      flashUntil: 0, targetX: 0, targetY: 0, volley: 0, openingShown: false };
     this.bossCue = this.add.image(spec.x, spec.y - 68, 'boss-warning').setOrigin(0.5, 1).setDepth(9).setVisible(false);
+    this.bossOpenCue = this.add.image(spec.x, spec.y - 68, 'boss-vulnerable').setOrigin(0.5, 1).setDepth(9).setVisible(false);
     this.physics.add.overlap(this.player, this.boss, () => this.bossContact());
     const arena = spec.arena;
     this.gate = this.add.tileSprite(arena.x + arena.w - 12, arena.y, 12, arena.h, `${this.level.id}-ground`).setOrigin(0).setDepth(4);
@@ -218,15 +224,28 @@ class Play extends Phaser.Scene {
       if (this.collected.has(id)) return;
       const previous = Math.min(ROOST_EMBLEM_GOAL, this.collected.size);
       this.collected.add(id);
-      sprite.setAlpha(0.25);
+      sprite.destroy();
       const progress = Math.min(ROOST_EMBLEM_GOAL, this.collected.size);
       const patch = { emblems: [...this.collected] };
       if (progress >= ROOST_EMBLEM_GOAL && ['meadow', 'cliff', 'canopy'].every(area => this.save.defeated?.includes(area))) {
         Object.assign(patch, { area: 3, checkpoint: null });
       }
       this.persist(patch);
+      const previousMaximum = this.maxHealth;
+      this.maxHealth = maxHealthFor(this.save);
+      if (this.maxHealth > previousMaximum) this.health = this.maxHealth;
+      if (progress >= ROOST_EMBLEM_GOAL) {
+        for (const pickup of [...this.pickups.getChildren()]) if (pickup.getData('kind') === 'emblem') pickup.destroy();
+      }
       audio.effect('flower');
-      shell.showToast(previous < ROOST_EMBLEM_GOAL && progress >= ROOST_EMBLEM_GOAL ? 'High Roost unlocked' : `Sky Emblem ${progress}/${ROOST_EMBLEM_GOAL}`);
+      if ((previous < 4 && progress >= 4) || (previous < 8 && progress >= 8)) {
+        shell.showToast(`Heart Flower restored - max health ${this.maxHealth}`);
+      } else if (previous < ROOST_EMBLEM_GOAL && progress >= ROOST_EMBLEM_GOAL) {
+        shell.showToast('All Sky Emblems found - High Roost seal restored');
+      } else {
+        const next = progress < 4 ? 4 : progress < 8 ? 8 : ROOST_EMBLEM_GOAL;
+        shell.showToast(`Sky Emblem ${progress}/${ROOST_EMBLEM_GOAL} - next blessing at ${next}`);
+      }
     } else if (kind === 'checkpoint') {
       if (this.visitedCheckpoints.has(id)) return;
       this.visitedCheckpoints.add(id);
@@ -266,7 +285,7 @@ class Play extends Phaser.Scene {
   resume() {
     if (this.mode !== 'paused') return;
     this.save = SaveStore.get(this.slotIndex);
-    this.maxHealth = this.save.assists.extraHealth ? 5 : 3;
+    this.maxHealth = maxHealthFor(this.save);
     this.health = Math.min(this.maxHealth, this.health);
     this.mode = 'playing';
     this.physics.resume();
@@ -574,10 +593,12 @@ class Play extends Phaser.Scene {
     this.seeds.clear(true, true);
     if (this.bossEngaged && !this.bossDefeated) {
       this.bossEngaged = false;
-      Object.assign(this.bossState, { hp: 6, phase: 'sleep', until: 0, started: 0, hitUntil: 0, flashUntil: 0, volley: 0 });
+      Object.assign(this.bossState, { hp: 6, phase: 'sleep', until: 0, started: 0, hitUntil: 0, flashUntil: 0, volley: 0, openingShown: false });
       this.boss.body.reset(this.level.boss.x, this.level.boss.y);
-      this.boss.setTexture(`boss-${this.level.boss.type}`).clearTint().setAlpha(1);
+      this.setBossTexture(`boss-${this.level.boss.type}`);
+      this.boss.clearTint().setAlpha(1);
       this.bossCue.setVisible(false);
+      this.bossOpenCue.setVisible(false);
       this.boss.setVelocity(0, 0);
       for (const ledge of this.bossPlatforms) { ledge.setVisible(false); ledge.body.enable = false; }
       this.cameras.main.setBounds(0, 0, this.level.width, this.level.height);
@@ -612,6 +633,7 @@ class Play extends Phaser.Scene {
     this.cameras.main.stopFollow();
     this.cameras.main.pan((this.player.x + this.boss.x) / 2, arena.y + arena.h / 2, 850, 'Sine.easeInOut');
     this.boss.setAlpha(0);
+    this.bossOpenCue.setVisible(false);
     this.tweens.add({ targets: this.boss, alpha: 1, duration: 520, delay: 180, ease: 'Sine.easeOut' });
     audio.startMusic(this.level.id, 6, 'boss');
     audio.effect('boss');
@@ -621,7 +643,8 @@ class Play extends Phaser.Scene {
   updateBossIntro() {
     const state = this.bossState;
     const key = this.bossAnimationTexture(this.level.boss.type, state);
-    this.boss.setTexture(key).setFlipX(this.player.x < this.boss.x);
+    this.setBossTexture(key);
+    this.boss.setFlipX(this.player.x < this.boss.x);
     if (this.clock < state.until) return;
     state.phase = 'warn';
     state.started = this.clock;
@@ -642,6 +665,7 @@ class Play extends Phaser.Scene {
     const state = this.bossState;
     if (!this.bossEngaged) {
       this.bossCue.setVisible(false);
+      this.bossOpenCue.setVisible(false);
       if (this.player.x < arena.x + 20) return;
       this.startBossIntro();
       return;
@@ -700,8 +724,11 @@ class Play extends Phaser.Scene {
     if (boss.y > spec.y) { boss.y = spec.y; boss.body.updateFromGameObject(); }
     boss.setFlipX(state.facing < 0);
     const animation = this.bossAnimationTexture(spec.type, state);
-    boss.setTexture(`${animation}${this.clock < (state.flashUntil || 0) ? '-hit' : ''}`);
+    this.setBossTexture(`${animation}${this.clock < (state.flashUntil || 0) ? '-hit' : ''}`);
     boss.setAlpha(this.clock < state.hitUntil && Math.floor(this.clock * 12) % 2 ? 0.5 : 1);
+    const open = state.phase === 'recover';
+    this.bossOpenCue.setVisible(open).setPosition(boss.x, boss.y - 67)
+      .setAlpha(open ? 0.72 + Math.sin(this.clock * 14) * 0.28 : 0);
   }
 
   bossAnimationTexture(type, state) {
@@ -713,11 +740,27 @@ class Play extends Phaser.Scene {
     return `boss-${type}-${phase}${frame}`;
   }
 
+  setBossTexture(key) {
+    const fallback = `boss-${this.level.boss.type}`;
+    const damageFallback = `${fallback}-hit`;
+    let resolved = fallback;
+    if (this.textures.exists(key)) resolved = key;
+    else if (key.endsWith('-hit') && this.textures.exists(damageFallback)) resolved = damageFallback;
+    this.boss.setTexture(resolved);
+  }
+
   bossRecover(duration) {
-    this.bossState.phase = 'recover';
-    this.bossState.started = this.clock;
-    this.bossState.until = this.clock + duration;
+    const state = this.bossState;
+    state.phase = 'recover';
+    state.started = this.clock;
+    state.until = this.clock + duration;
     this.boss.setVelocity(0, 0);
+    this.bossOpenCue.setVisible(true).setPosition(this.boss.x, this.boss.y - 67).setAlpha(1);
+    audio.effect('opening');
+    if (!state.openingShown) {
+      state.openingShown = true;
+      shell.showToast('Opening! Strike while the guardian rests');
+    }
     for (const ledge of this.bossPlatforms) { ledge.setVisible(true); ledge.body.enable = true; }
   }
 
@@ -737,12 +780,14 @@ class Play extends Phaser.Scene {
     if (!this.bossEngaged || this.bossDefeated || state.phase !== 'recover' || this.clock < state.hitUntil) return;
     state.hitUntil = this.clock + 0.7;
     state.flashUntil = this.clock + 0.24;
-    this.boss.setTexture(`boss-${this.level.boss.type}-hit`).clearTint();
+    this.setBossTexture(`boss-${this.level.boss.type}-hit`);
+    this.boss.clearTint();
     state.hp--;
     audio.effect('hit');
     if (state.hp > 0) return;
     this.bossDefeated = true;
     this.bossCue.setVisible(false);
+    this.bossOpenCue.setVisible(false);
     this.boss.body.enable = false;
     this.boss.setVelocity(0, 0);
     this.seeds.clear(true, true);
@@ -805,7 +850,7 @@ class Play extends Phaser.Scene {
     }
     shell.updateHud({ area: chapter?.name || this.level.name, health: this.health, maxHealth: this.maxHealth, emblems: this.collected.size,
       bossName: this.bossEngaged && !this.bossDefeated ? this.level.boss.name : '', bossHealth: this.bossState?.hp || 0,
-      bossMax: this.bossState?.max || 6, gliding: this.gliding });
+      bossMax: this.bossState?.max || 6, bossVulnerable: this.bossEngaged && this.bossState?.phase === 'recover', gliding: this.gliding });
   }
 }
 

@@ -68,7 +68,7 @@ try {
   });
   assert.equal(result.damaged.hp, 1); assert(result.damaged.texture.endsWith('-hit'));
   for (const key of ['singleHit', 'cleared', 'blocked', 'defeated', 'bossHit', 'reset', 'fullLeavesFlower', 'heals']) assert(result[key], key);
-  assert.equal(result.hud.healthSlots, 3); assert.equal(result.hud.label, 'Emblems 1');
+  assert.equal(result.hud.healthSlots, 3); assert.equal(result.hud.label, 'Emblems 1/12');
   assert.deepEqual(result.animation.map(a => a.key), ['boco-peck0', 'boco-peck1', 'boco-peck2', 'boco-peck3']);
   for (const frame of result.animation) assert.deepEqual(frame.shape, result.initialShape);
   assert.equal(result.distinctGround, 4); assert.equal(result.distinctAir, 4); assert(result.palePixels > 100);

@@ -617,6 +617,11 @@ function objects(scene) {
     rect(ctx, '#3b3038', 2, 0, 5, 11); rect(ctx, '#ffe777', 3, 1, 3, 8);
     rect(ctx, '#3b3038', 2, 12, 5, 4); rect(ctx, '#fff1a8', 3, 13, 3, 2);
   });
+  texture(scene, 'boss-vulnerable', 16, 16, ctx => {
+    polygon(ctx, '#243b38', [[8, 0], [12, 4], [12, 7], [16, 7], [8, 16], [0, 7], [4, 7], [4, 4]]);
+    polygon(ctx, '#ffe777', [[8, 2], [10, 5], [10, 9], [13, 9], [8, 14], [3, 9], [6, 9], [6, 5]]);
+    rect(ctx, '#fff8cf', 7, 4, 3, 6);
+  });
   texture(scene, 'flower', 16, 32, ctx => {
     rect(ctx, '#305952', 7, 14, 2, 17);
     rect(ctx, '#8bac68', 7, 17, 1, 12);
@@ -744,8 +749,6 @@ export function createArt(scene) {
       for (let frame = 0; frame < count; frame++) {
         const animationKey = `boss-${key}-${phase}${frame}`;
         texture(scene, animationKey, 64, 64, ctx => bossAnimationFrame(ctx, source, key, phase, frame));
-        // Bosses are vulnerable only during recovery, so only those frames
-        // need a second damage palette in memory.
         if (phase === 'recover') hitTexture(scene, animationKey);
       }
     }

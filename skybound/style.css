@@ -79,6 +79,8 @@ select { background:#203d30; color:var(--ink); border:1px solid var(--line); bor
 .hud button svg { display:block; width:20px; height:20px; }
 .boss-bar { width:58%; margin:4px auto; background:#0b211acc; padding:4px 6px; font-size:10px; }
 .boss-bar meter { width:100%; height:7px; display:block; margin-top:3px; }
+.boss-bar.vulnerable { color:#ffe777; border:1px solid #ffe777; background:#17382aeb; }
+.boss-bar.vulnerable meter::-webkit-meter-optimum-value { background:#ffe777; }
 meter::-webkit-meter-bar { background:#213a30; border:0; }
 meter::-webkit-meter-optimum-value { background:#e88568; }
 .glide-state { position:absolute; bottom:6px; left:8px; color:#cef1e8; font-size:9px; }

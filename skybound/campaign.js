@@ -122,8 +122,8 @@ export function extendLevel(original) {
   if (!CHAPTERS[original.id]) return original;
   const level = structuredClone(original);
   level.springs = level.springs || [];
-  // Keep one demanding emblem in each area's opening route. The six acts add
-  // one apiece, replacing the old one-per-room shower of collectibles.
+  // Keep one demanding emblem in each opening route. Acts 2, 4, and 6 add one
+  // apiece, making exactly four meaningful emblems per main area.
   level.emblems = level.emblems.slice(-1);
   const insertAt = level.terrain.at(-1).x;
   const floor = level.terrain.at(-1).y;
@@ -187,7 +187,7 @@ export function extendLevel(original) {
       // Healing follows the encounter on the required path in either direction.
       const healingX = cursor + 960;
       level.flowers.push({ id: `${id}-flower`, x: healingX, y: surface(healingX) });
-      if (roomIndex === 4) {
+      if (roomIndex === 4 && [1, 3, 5].includes(chapterIndex)) {
         level.emblems.push({ id: `${chapterId}-emblem`, x: pointX(room.prize[0]), y: floor - room.prize[1] - 16 });
       }
       if ([0, 3, 6].includes(roomIndex)) {
