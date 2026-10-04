@@ -17,6 +17,7 @@ let shell;
 let game;
 const bodyRect = (object) => ({ x: object.body.x, y: object.body.y, width: object.body.width, height: object.body.height });
 const emblemCount = (save) => Math.min(ROOST_EMBLEM_GOAL, save?.emblems?.length || 0);
+const hasWindCrest = (save) => emblemCount(save) >= ROOST_EMBLEM_GOAL;
 const maxHealthFor = (save) => Math.max(save?.assists?.extraHealth ? 5 : 3,
   3 + Math.min(2, Math.floor(emblemCount(save) / 4)));
 
@@ -81,6 +82,7 @@ class Play extends Phaser.Scene {
     this.physics.add.overlap(this.player, this.springs, (_player, spring) => this.springContact(spring));
     this.enemies = this.physics.add.group();
     this.seeds = this.physics.add.group({ allowGravity: false });
+    this.windStrikes = this.physics.add.group({ allowGravity: false });
     this.enemyData = new Map();
     this.buildEnemies();
     this.physics.add.collider(this.enemies, this.ground, undefined, (enemy) => !enemy.getData('flying'));
@@ -110,7 +112,7 @@ class Play extends Phaser.Scene {
       this.physics.pause();
       if (data.menu === 'slots') shell.showSlots(); else shell.showTitle();
       audio.resume();
-      audio.startMenuMusic();
+      if (data.menu === 'slots') audio.startMenuMusic(); else audio.startTitleMusic();
     }
     this.refreshHud();
   }
@@ -241,7 +243,8 @@ class Play extends Phaser.Scene {
       if ((previous < 4 && progress >= 4) || (previous < 8 && progress >= 8)) {
         shell.showToast(`Heart Flower restored - max health ${this.maxHealth}`);
       } else if (previous < ROOST_EMBLEM_GOAL && progress >= ROOST_EMBLEM_GOAL) {
-        shell.showToast('All Sky Emblems found - High Roost seal restored');
+        audio.effect('crest');
+        shell.showToast('Wind Crest awakened - attacks launch a wind blade');
       } else {
         const next = progress < 4 ? 4 : progress < 8 ? 8 : ROOST_EMBLEM_GOAL;
         shell.showToast(`Sky Emblem ${progress}/${ROOST_EMBLEM_GOAL} - next blessing at ${next}`);
@@ -333,6 +336,7 @@ class Play extends Phaser.Scene {
     this.updateEnemies(dt);
     this.updateBoss(dt);
     this.updateAttack();
+    this.updateWindStrikes();
     for (const seed of this.seeds.getChildren()) if (this.clock > seed.getData('expires') || seed.y > this.level.height + 60) seed.destroy();
     this.animatePlayer();
     if (this.player.y > this.level.height + 45) this.die();
@@ -407,6 +411,7 @@ class Play extends Phaser.Scene {
       this.attackReady = this.clock + 0.3;
       this.attackVictims.clear();
       audio.effect('peck');
+      if (hasWindCrest(this.save)) this.launchWindStrike();
     }
     this.player.setFlipX(this.facing < 0);
   }
@@ -535,16 +540,59 @@ class Play extends Phaser.Scene {
     for (const [enemy, state] of this.enemyData) {
       if (!enemy.active || state.dead || this.attackVictims.has(enemy) || !overlaps(attack, bodyRect(enemy))) continue;
       this.attackVictims.add(enemy);
-      if (state.type === 'shellback') {
-        const front = state.dir > 0 ? this.player.x > enemy.x : this.player.x < enemy.x;
-        if (!front) { audio.effect('peck'); continue; }
-      }
-      state.hp--;
-      if (state.hp <= 0) this.killEnemy(enemy);
-      else { state.hitUntil = this.clock + 0.24; enemy.setTexture(`${state.type}-hit`).clearTint(); state.dir *= -1; audio.effect('hit'); }
+      this.hitEnemy(enemy, this.player.x);
     }
     for (const seed of this.seeds.getChildren()) if (overlaps(attack, bodyRect(seed))) seed.destroy();
     if (this.boss?.active && !this.bossDefeated && overlaps(attack, bodyRect(this.boss))) this.hitBoss();
+  }
+
+  hitEnemy(enemy, sourceX) {
+    const state = this.enemyData.get(enemy);
+    if (!state || state.dead) return false;
+    if (state.type === 'shellback') {
+      const front = state.dir > 0 ? sourceX > enemy.x : sourceX < enemy.x;
+      if (!front) { audio.effect('peck'); return false; }
+    }
+    state.hp--;
+    if (state.hp <= 0) this.killEnemy(enemy);
+    else {
+      state.hitUntil = this.clock + 0.24;
+      enemy.setTexture(`${state.type}-hit`).clearTint();
+      state.dir *= -1;
+      audio.effect('hit');
+    }
+    return true;
+  }
+
+  launchWindStrike() {
+    const strike = this.windStrikes.create(this.player.x + this.facing * 18, this.player.y - 14, 'wind-strike').setDepth(7);
+    strike.body.setSize(20, 10).setOffset(2, 3).setAllowGravity(false);
+    strike.setVelocityX(this.facing * 190).setFlipX(this.facing < 0);
+    strike.setData('expires', this.clock + 0.36);
+    audio.effect('wind-strike');
+  }
+
+  updateWindStrikes() {
+    for (const strike of [...this.windStrikes.getChildren()]) {
+      if (!strike.active) continue;
+      if (this.clock >= strike.getData('expires') || strike.x < 0 || strike.x > this.level.width) { strike.destroy(); continue; }
+      let spent = false;
+      for (const [enemy, state] of this.enemyData) {
+        if (!enemy.active || state.dead || !overlaps(bodyRect(strike), bodyRect(enemy))) continue;
+        this.hitEnemy(enemy, strike.x);
+        strike.destroy();
+        spent = true;
+        break;
+      }
+      if (spent || !strike.active) continue;
+      for (const seed of this.seeds.getChildren()) {
+        if (seed.active && overlaps(bodyRect(strike), bodyRect(seed))) { seed.destroy(); strike.destroy(); spent = true; break; }
+      }
+      if (!spent && strike.active && this.boss?.active && !this.bossDefeated && overlaps(bodyRect(strike), bodyRect(this.boss))) {
+        this.hitBoss();
+        strike.destroy();
+      }
+    }
   }
 
   damage(sourceX) {
@@ -591,6 +639,7 @@ class Play extends Phaser.Scene {
     this.glideToggled = false;
     controls.clear();
     this.seeds.clear(true, true);
+    this.windStrikes.clear(true, true);
     if (this.bossEngaged && !this.bossDefeated) {
       this.bossEngaged = false;
       Object.assign(this.bossState, { hp: 6, phase: 'sleep', until: 0, started: 0, hitUntil: 0, flashUntil: 0, volley: 0, openingShown: false });
@@ -898,6 +947,12 @@ window.addEventListener('skybound:audio', () => {
   void audio.unlock();
   const updated = SaveStore.saveSettings({ muted: needsUnlock ? false : !settings.muted });
   window.dispatchEvent(new CustomEvent('skybound:settings', { detail: updated }));
+});
+window.addEventListener('skybound:menu', (event) => {
+  if (!event.detail?.open || scene()?.mode !== 'title') return;
+  audio.resume();
+  if (event.detail.view === 'title') audio.startTitleMusic();
+  else audio.startMenuMusic();
 });
 window.addEventListener('pagehide', () => scene()?.flushSave());
 

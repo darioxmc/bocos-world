@@ -8,7 +8,7 @@ async function fresh(storage) {
 }
 function memory() {
   const data = new Map();
-  return { getItem: (key) => data.get(key) ?? null, setItem: (key, value) => data.set(key, value) };
+  return { getItem: (key) => data.get(key) ?? null, setItem: (key, value) => data.set(key, value), removeItem: (key) => data.delete(key) };
 }
 
 test('three slots remain isolated and exported saves restore progress', async () => {
@@ -62,4 +62,21 @@ test('persisted state survives a reload and corrupt records recover safely', asy
   assert.equal(reloaded.get(0).checkpoint, 'meadow-checkpoint-1');
   const corrupt = await fresh({ getItem: () => 'not JSON', setItem() {} });
   assert.deepEqual(corrupt.slots(), [null, null, null]);
+});
+
+test('generation two clears legacy adventures while preserving device settings', async () => {
+  const storage = memory();
+  storage.setItem('skybound:save-store:v1', JSON.stringify({
+    version: 1,
+    slots: [{ version: 1, name: 'Old Boco', area: 2, checkpoint: null, health: 5,
+      defeated: ['meadow'], emblems: Array.from({ length: 12 }, (_, index) => `old-${index}`),
+      playtime: 900, completed: false, assists: { extraHealth: false, reducedDamage: false, toggleGlide: false }, updatedAt: 1 }, null, null],
+    settings: { music: 0.2, effects: 0.7, muted: false, touchScale: 1.25, touchMode: 'on', bindings: {}, padBindings: {} },
+  }));
+  const store = await fresh(storage);
+  assert.deepEqual(store.slots(), [null, null, null]);
+  assert.equal(store.getSettings().music, 0.2);
+  assert.equal(store.getSettings().touchMode, 'on');
+  assert.equal(storage.getItem('skybound:save-store:v1'), null);
+  assert.ok(storage.getItem('skybound:save-store:v2'));
 });

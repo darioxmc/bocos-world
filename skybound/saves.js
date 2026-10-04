@@ -1,5 +1,6 @@
-const VERSION = 1;
-const STORAGE_KEY = 'skybound:save-store:v1';
+const VERSION = 2;
+const STORAGE_KEY = 'skybound:save-store:v2';
+const LEGACY_STORAGE_KEY = 'skybound:save-store:v1';
 const MAX_JSON_BYTES = 64 * 1024;
 const AREAS = ['meadow', 'cliff', 'canopy', 'roost'];
 const ACTIONS = ['left', 'right', 'up', 'down', 'jump', 'attack', 'glide', 'pause', 'confirm', 'back'];
@@ -129,7 +130,21 @@ class Store {
       if (!storage) throw new Error('Local storage is unavailable');
       const json = storage.getItem(STORAGE_KEY);
       this._storageAvailable = true;
-      if (json === null) return;
+      if (json === null) {
+        // Generation two intentionally starts fresh after the emblem rebalance,
+        // but keeps the player's device, volume, and control preferences.
+        const legacyJson = storage.getItem(LEGACY_STORAGE_KEY);
+        if (legacyJson !== null) {
+          try {
+            const legacy = parse(legacyJson);
+            settings(legacy.settings);
+            this._state.settings = copy(legacy.settings);
+          } catch { /* Invalid legacy data is discarded with the old slots. */ }
+          storage.removeItem?.(LEGACY_STORAGE_KEY);
+          storage.setItem(STORAGE_KEY, JSON.stringify(this._state));
+        }
+        return;
+      }
       const state = parse(json);
       object(state, ['version', 'slots', 'settings'], 'store', true);
       if (state.version !== VERSION) fail('Unsupported store version');

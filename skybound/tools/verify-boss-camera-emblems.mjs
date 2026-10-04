@@ -130,6 +130,7 @@ try {
     skybound.saves.save(0, { emblems: Array.from({ length: 12 }, (_, i) => `legacy-${i}`) });
     skybound.shell.showWorld(0);
     const unlocked = !row().disabled;
+    skybound.shell.hide();
     const s = skybound.scene;
     const first = s.pickups.getChildren().find(pickup => pickup.getData('kind') === 'emblem');
     s.save = skybound.saves.save(0, { emblems: ['legacy-0', 'legacy-1', 'legacy-2'], assists: { extraHealth: false } });
@@ -139,23 +140,51 @@ try {
     s.save = skybound.saves.save(0, { defeated: ['meadow', 'cliff', 'canopy'],
       emblems: Array.from({ length: 11 }, (_, i) => `legacy-${i}`), assists: { extraHealth: false } });
     s.collected = new Set(s.save.emblems); s.maxHealth = 4; s.health = 2; s.pickup(second); s.refreshHud();
+    const emblemRect = document.querySelector('#hud-emblems').getBoundingClientRect();
+    const soundRect = document.querySelector('#sound-button').getBoundingClientRect();
     const completion = { max: s.maxHealth, health: s.health,
       remaining: s.pickups.getChildren().filter(pickup => pickup.active && pickup.getData('kind') === 'emblem').length,
-      hud: document.querySelector('#hud-emblems').textContent };
+      hud: document.querySelector('#hud-emblems').textContent, fits: emblemRect.right <= soundRect.left };
     return { counts, hud, locked, unlocked, firstBlessing, completion, note: document.querySelector('.menu-note')?.textContent || '' };
   });
   assert.deepEqual(emblemReport.counts, [4, 4, 4, 0]);
   assert.equal(emblemReport.hud, 'Emblems 5/12');
   assert(emblemReport.locked && emblemReport.unlocked);
   assert.deepEqual(emblemReport.firstBlessing, { max: 4, health: 4, active: false });
-  assert.deepEqual(emblemReport.completion, { max: 5, health: 5, remaining: 0, hud: 'Emblems 12/12' });
+  assert.deepEqual(emblemReport.completion, { max: 5, health: 5, remaining: 0, hud: 'Crest 12/12', fits: true });
+  const crestReport = await page.evaluate(() => {
+    const s = skybound.scene;
+    const target = [...s.enemyData].find(([, state]) => state.type !== 'shellback' && !state.dead);
+    const [enemy, state] = target;
+    state.hp = 2;
+    s.facing = 1;
+    s.launchWindStrike();
+    const strike = s.windStrikes.getChildren()[0];
+    const texture = strike.texture.key;
+    strike.body.reset(enemy.body.center.x, enemy.body.center.y);
+    s.updateWindStrikes();
+    const enemyHit = state.hp === 1 && s.windStrikes.countActive() === 0;
+
+    s.bossEngaged = true; s.bossDefeated = false; s.bossState.hp = 6; s.bossState.hitUntil = 0;
+    s.bossState.phase = 'warn';
+    s.launchWindStrike();
+    s.windStrikes.getChildren()[0].body.reset(s.boss.body.center.x, s.boss.body.center.y);
+    s.updateWindStrikes();
+    const armoredBossHealth = s.bossState.hp;
+    s.bossState.phase = 'recover'; s.bossState.hitUntil = 0;
+    s.launchWindStrike();
+    s.windStrikes.getChildren()[0].body.reset(s.boss.body.center.x, s.boss.body.center.y);
+    s.updateWindStrikes();
+    return { texture, enemyHit, armoredBossHealth, openBossHealth: s.bossState.hp };
+  });
+  assert.deepEqual(crestReport, { texture: 'wind-strike', enemyHit: true, armoredBossHealth: 6, openBossHealth: 5 });
   await page.evaluate(() => skybound.scene.scene.restart({ slot: 0, area: 1 }));
   await page.waitForFunction(() => skybound.scene.areaIndex === 1 && skybound.scene.mode === 'playing');
   const completedReload = await page.evaluate(() => ({ max: skybound.scene.maxHealth,
     emblems: skybound.scene.pickups.getChildren().filter(pickup => pickup.getData('kind') === 'emblem').length }));
   assert.deepEqual(completedReload, { max: 5, emblems: 0 });
   assert.deepEqual(errors, []);
-  console.log('Boss reveal, complete damage frames, OPEN signal, vertical camera, exact 12-emblem economy, health blessings, and Roost gate passed.');
+  console.log('Boss reveal, complete damage frames, OPEN signal, vertical camera, exact 12-emblem economy, Wind Crest, health blessings, and Roost gate passed.');
 } finally {
   await browser.close();
 }

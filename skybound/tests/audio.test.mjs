@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { AudioEngine, BOCO_THEME, MUSIC_THEMES } from '../audio.js';
+import { AudioEngine, BOCO_THEME, TITLE_THEME, MUSIC_THEMES } from '../audio.js';
 
 test('a later gesture retries a suspended controller-initiated audio unlock', async () => {
   const engine = new AudioEngine();
@@ -60,8 +60,28 @@ test('Boco menu theme has a distinct layered heroic phrase', () => {
   engine.destroy();
 });
 
+test('title fanfare is fuller and musically distinct from the menu theme', () => {
+  const signature = (mode, theme) => {
+    const engine = new AudioEngine();
+    const voices = [];
+    engine._musicMode = mode;
+    engine._voice = (...args) => voices.push(args);
+    for (let step = 0; step < 128; step++) engine._musicStep(theme, step, step / 8, 0.125);
+    engine.destroy();
+    return voices;
+  };
+  const title = signature('title', TITLE_THEME);
+  const menu = signature('boco', BOCO_THEME);
+  const titleWaves = new Set(title.filter(([, , , frequency]) => frequency > 0).map(([, , , , , type]) => type));
+  assert.deepEqual([...titleWaves].sort(), ['sawtooth', 'sine', 'square', 'triangle']);
+  assert.ok(title.length > menu.length, 'title arrangement should have a broader orchestration');
+  assert.notDeepEqual(title, menu);
+});
+
 test('menu music queues before unlock and hands off to level music', () => {
   const engine = new AudioEngine();
+  engine.startTitleMusic();
+  assert.equal(engine._musicMode, 'title');
   engine.startMenuMusic();
   assert.equal(engine._area, 0);
   assert.equal(engine._musicMode, 'boco');

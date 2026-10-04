@@ -20,7 +20,8 @@ moving platforms, collect Sky Emblems, and restore the gardens. Flowers
 heal without granting invulnerability. Damage turns Boco's white center red.
 Healing flowers remain available when health is full. The separately labeled
 Emblems counter tracks twelve optional challenges: the fourth and eighth add
-a Heart Flower, while all twelve help unlock High Roost. Completed emblems do
+a Heart Flower, while all twelve awaken the Wind Crest, causing each attack to
+launch a short-range wind blade, and help unlock High Roost. Completed emblems do
 not respawn. Bosses signal their vulnerable recovery with an arrow, chime, and
 an `OPEN` state in the boss meter.
 Attacks animate Boco's whole head; actual enemy damage uses Canvas-compatible
@@ -48,6 +49,8 @@ collectibles, and every 15 seconds of active play. Export/import JSON in the
 save selector provides backups and transfers. Browser clearing removes local
 saves. Blocked storage falls back to the current session and displays a notice.
 Completed areas can be replayed without reducing unlocked progression.
+Save generation two starts with three empty slots after the twelve-emblem
+rebalance while preserving compatible audio and control settings.
 
 ## Source
 
@@ -57,7 +60,8 @@ Completed areas can be replayed without reducing unlocked progression.
 - `enemy-navigation.js`: terrain-aware patrol, hop, and flight constraints.
 - `art.js`: original, deterministic raster pixel textures and parallax layers.
 - `input.js`, `shell.js`, `style.css`: input aggregation, menus, responsive shell.
-- `saves.js`, `audio.js`: validated persistence and bounded Web Audio synthesis.
+- `saves.js`, `audio.js`: validated persistence and bounded Web Audio synthesis,
+  including separate original title-fanfare and menu arrangements.
 - `assets/art-preview.html`: independently inspect generated artwork.
 - `qa/sprite-atlas.png`: exported raster art atlas from browser verification.
 

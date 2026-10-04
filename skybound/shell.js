@@ -114,7 +114,7 @@ export class Shell {
     this.overlay.setAttribute('aria-label', heading);
     document.body.classList.add('menu-open');
     this.hud.hidden = true;
-    window.dispatchEvent(new CustomEvent('skybound:menu', {detail:{open:true}}));
+    window.dispatchEvent(new CustomEvent('skybound:menu', {detail:{open:true, view}}));
     const menu = node('div', settings ? 'menu settings-menu' : 'menu');
     if (!title) menu.append(node('h1', 'menu-heading', heading));
     this.overlay.append(menu);
@@ -163,7 +163,7 @@ export class Shell {
         const checkpoint = LEVELS[slot.area]?.checkpoints.find(point => point.id === slot.checkpoint);
         const summary = node('small', 'slot-summary');
         const emblems = Math.min(ROOST_EMBLEM_GOAL, slot.emblems?.length || 0);
-        for (const text of [area, `${emblems}/${ROOST_EMBLEM_GOAL} emblems`, `Time ${playtimeLabel(slot.playtime)}`, checkpoint?.name || (slot.checkpoint ? 'Checkpoint saved' : 'Area start'), ...(slot.completed ? ['Complete'] : [])]) summary.append(node('span', '', text), document.createTextNode(' '));
+        for (const text of [area, `${emblems}/${ROOST_EMBLEM_GOAL} emblems`, ...(emblems >= ROOST_EMBLEM_GOAL ? ['Wind Crest'] : []), `Time ${playtimeLabel(slot.playtime)}`, checkpoint?.name || (slot.checkpoint ? 'Checkpoint saved' : 'Area start'), ...(slot.completed ? ['Complete'] : [])]) summary.append(node('span', '', text), document.createTextNode(' '));
         main.append(summary);
       } else main.append(node('small', '', 'Empty'));
       const tools = node('div', 'slot-tools');
@@ -265,7 +265,8 @@ export class Shell {
       stack.append(button);
     });
     menu.append(stack);
-    if (!roostUnlocked) menu.append(node('p', 'menu-note', `Sky Emblems: 4 and 8 restore Heart Flowers. Find all ${ROOST_EMBLEM_GOAL} and restore three gardens to open High Roost. Progress ${emblemCount}/${ROOST_EMBLEM_GOAL}.`));
+    if (!roostUnlocked) menu.append(node('p', 'menu-note', `Sky Emblems: 4 and 8 restore Heart Flowers. Find all ${ROOST_EMBLEM_GOAL} to awaken the Wind Crest, then restore three gardens to open High Roost. Progress ${emblemCount}/${ROOST_EMBLEM_GOAL}.`));
+    else menu.append(node('p', 'menu-note', 'Wind Crest awakened - Boco\'s attacks launch a short-range wind blade.'));
     const actions = node('div', 'menu-actions');
     actions.append(this.button('Saves', () => this.showSlots()), this.button('Settings', () => this.showSettings(() => this.showWorld(index))));
     menu.append(actions);
@@ -307,8 +308,8 @@ export class Shell {
     const menu = this.open('victory', isFinal ? 'The Sky Is Open' : 'Area Clear');
     menu.append(node('div', 'victory-symbol', '★'), node('p', 'story-copy', `${LEVELS[levelIndex]?.name || 'Area'} restored.`));
     const count = Math.min(ROOST_EMBLEM_GOAL, SaveStore.get(index)?.emblems?.length || 0);
-    menu.append(node('p', 'menu-note', count >= ROOST_EMBLEM_GOAL ? 'All Sky Emblems found - the High Roost seal is restored' :
-      `${count}/${ROOST_EMBLEM_GOAL} Sky Emblems - 4 and 8 restore Heart Flowers`));
+    menu.append(node('p', 'menu-note', count >= ROOST_EMBLEM_GOAL ? 'Wind Crest awakened - attacks now launch a wind blade' :
+      `${count}/${ROOST_EMBLEM_GOAL} Sky Emblems - 4 and 8 restore Heart Flowers; 12 awaken the Wind Crest`));
     const actions = node('div', 'menu-actions');
     actions.append(this.button(isFinal ? 'Continue' : 'Next Area', () => isFinal ? this.showEnding(index) : this.start(index, Math.min(levelIndex + 1, LEVELS.length - 1)), 'primary'), this.button('Areas', () => this.showWorld(index)));
     menu.append(actions);
@@ -507,9 +508,10 @@ export class Shell {
     flowers.setAttribute('aria-label', `Health ${current} of ${maximum}`);
     const emblemCount = Math.min(ROOST_EMBLEM_GOAL, Array.isArray(emblems) ? emblems.length : emblems ?? 0);
     const emblemCounter = document.getElementById('hud-emblems');
-    emblemCounter.textContent = `Emblems ${emblemCount}/${ROOST_EMBLEM_GOAL}`;
-    emblemCounter.setAttribute('aria-label', `${emblemCount} of ${ROOST_EMBLEM_GOAL} Sky Emblems collected`);
-    emblemCounter.title = `4 and 8 restore Heart Flowers; ${ROOST_EMBLEM_GOAL} unlock the High Roost`;
+    emblemCounter.textContent = emblemCount >= ROOST_EMBLEM_GOAL ? `Crest ${emblemCount}/${ROOST_EMBLEM_GOAL}` : `Emblems ${emblemCount}/${ROOST_EMBLEM_GOAL}`;
+    emblemCounter.setAttribute('aria-label', emblemCount >= ROOST_EMBLEM_GOAL ?
+      `Wind Crest awakened; all ${ROOST_EMBLEM_GOAL} Sky Emblems collected` : `${emblemCount} of ${ROOST_EMBLEM_GOAL} Sky Emblems collected`);
+    emblemCounter.title = `4 and 8 restore Heart Flowers; ${ROOST_EMBLEM_GOAL} awaken the Wind Crest and help unlock High Roost`;
     const boss = document.getElementById('hud-boss');
     boss.hidden = !bossName || !(bossMax > 0);
     boss.classList.toggle('vulnerable', Boolean(bossVulnerable));

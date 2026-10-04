@@ -21,12 +21,12 @@ try {
     context: skybound.audio.context?.state || null,
     timer: skybound.audio._timer,
   }));
-  assert.equal(queued.mode, 'boco');
+  assert.equal(queued.mode, 'title');
   assert.equal(queued.area, 0);
   assert.equal(queued.timer, null);
 
-  await page.getByRole('button', { name: 'Settings', exact: true }).click();
-  await page.waitForFunction(() => skybound.audio.context?.state === 'running' && skybound.audio._timer !== null);
+  await page.locator('.wordmark').click();
+  await page.waitForFunction(() => skybound.audio._musicMode === 'title' && skybound.audio.context?.state === 'running' && skybound.audio._timer !== null);
   const sounding = await page.evaluate(async () => {
     const audio = skybound.audio;
     const analyser = audio.context.createAnalyser();
@@ -40,10 +40,13 @@ try {
     analyser.disconnect();
     return { mode: audio._musicMode, state: audio.context.state, step: audio._step, rms };
   });
-  assert.equal(sounding.mode, 'boco');
+  assert.equal(sounding.mode, 'title');
   assert.equal(sounding.state, 'running');
-  assert(sounding.step > 0, 'menu sequencer advances after the first gesture');
-  assert(sounding.rms > 0.0001, 'Boco theme produces an audible signal');
+  assert(sounding.step > 0, 'title sequencer advances after the first gesture');
+  assert(sounding.rms > 0.0001, 'title fanfare produces an audible signal');
+
+  await page.getByRole('button', { name: 'Play', exact: true }).click();
+  await page.waitForFunction(() => skybound.audio._musicMode === 'boco');
 
   await page.evaluate(() => {
     skybound.saves.create(0);
@@ -58,8 +61,10 @@ try {
     skybound.scene.scene.restart({ menu: 'slots' });
   });
   await page.waitForFunction(() => skybound.audio._musicMode === 'boco' && !skybound.audio._paused && skybound.audio._timer !== null);
+  await page.getByRole('button', { name: 'Back', exact: true }).click();
+  await page.waitForFunction(() => skybound.audio._musicMode === 'title' && skybound.audio._timer !== null);
   assert.deepEqual(errors, []);
-  console.log(`Menu music passed: queued before gesture, audible at RMS ${sounding.rms.toFixed(4)}, and cleanly hands off in both directions.`);
+  console.log(`Title fanfare and menu music passed: title queued before gesture, audible at RMS ${sounding.rms.toFixed(4)}, and cleanly hand off through level music.`);
 } finally {
   await browser.close();
 }

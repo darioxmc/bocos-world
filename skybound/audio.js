@@ -44,6 +44,24 @@ export const BOCO_THEME = {
   ],
 };
 
+// A ceremonial title fanfare, distinct from Boco's lighter menu leitmotif.
+// Open fifths, horn-like leads, and woodland arpeggios keep it heroic without
+// borrowing a melody from another game.
+export const TITLE_THEME = {
+  bpm: 104,
+  roots: [43, 43, 48, 50, 43, 52, 48, 50],
+  melody: [
+    0, 7, 12, 16, 14, 12, 7, -1,
+    5, 9, 12, 17, 16, 12, 9, -1,
+    7, 11, 14, 19, 16, 14, 11, 7,
+    9, 12, 16, 21, 19, 16, 14, -1,
+    12, 16, 19, 24, 21, 19, 16, 12,
+    9, 14, 17, 21, 19, 17, 14, -1,
+    7, 12, 16, 19, 17, 16, 12, 9,
+    5, 9, 12, 17, 16, 14, 12, 0,
+  ],
+};
+
 export class AudioEngine {
   constructor() {
     this.context = null;
@@ -265,6 +283,8 @@ export class AudioEngine {
       case 'chapter': tone(midi(67), 0.13, 0.12, 'triangle'); tone(midi(72), 0.18, 0.12, 'square', null, 0.08); tone(midi(79), 0.26, 0.1, 'triangle', null, 0.16); break;
       case 'boss': tone(82, 0.35, 0.23, 'sawtooth', 41); tone(123, 0.3, 0.12, 'square', 61); noise(0.2, 0.13, 250); break;
       case 'opening': tone(midi(72), 0.12, 0.14, 'triangle'); tone(midi(79), 0.2, 0.13, 'square', null, 0.07); break;
+      case 'wind-strike': tone(760, 0.12, 0.09, 'triangle', 380); noise(0.09, 0.035, 2400); break;
+      case 'crest': tone(midi(67), 0.2, 0.13, 'triangle'); tone(midi(72), 0.25, 0.14, 'square', null, 0.09); tone(midi(79), 0.34, 0.13, 'triangle', null, 0.18); tone(midi(84), 0.48, 0.11, 'square', null, 0.28); break;
       case 'win': tone(midi(72), 0.3, 0.14); tone(midi(76), 0.32, 0.12, 'triangle', null, 0.06); tone(midi(79), 0.38, 0.11, 'square', null, 0.12); tone(midi(84), 0.5, 0.12, 'triangle', null, 0.16); break;
       case 'menu': tone(620, 0.065, 0.12, 'triangle', 930); break;
     }
@@ -275,7 +295,7 @@ export class AudioEngine {
     const at = typeof area === 'string' ? AREA_NAMES.indexOf(area) : area;
     if (!Number.isInteger(at) || at < 0 || at >= MUSIC_THEMES.length) throw new RangeError('Unknown music area');
     const nextChapter = Math.max(0, Math.min(6, Number(chapter) || 0));
-    const nextMode = ['boss', 'boco'].includes(mode) ? mode : 'level';
+    const nextMode = ['boss', 'boco', 'title'].includes(mode) ? mode : 'level';
     if (this._area === at && this._chapter === nextChapter && this._musicMode === nextMode && this._timer !== null) return;
     this._haltMusic();
     this._area = at;
@@ -286,6 +306,8 @@ export class AudioEngine {
   }
 
   startMenuMusic() { this.startMusic(0, 0, 'boco'); }
+
+  startTitleMusic() { this.startMusic(0, 0, 'title'); }
 
   setMusicChapter(chapter = 0, mode = 'level') {
     if (this._area === null || this._destroyed) return;
@@ -300,7 +322,7 @@ export class AudioEngine {
 
   _scheduleMusic() {
     if (!this._canMusic()) { this._haltMusic(); return; }
-    const theme = this._musicMode === 'boco' ? BOCO_THEME : MUSIC_THEMES[this._area];
+    const theme = this._musicMode === 'title' ? TITLE_THEME : this._musicMode === 'boco' ? BOCO_THEME : MUSIC_THEMES[this._area];
     const stepLength = 60 / theme.bpm / 4;
     const now = this.context.currentTime;
     // Skip missed beats after main-thread stalls instead of replaying a backlog.
@@ -322,6 +344,7 @@ export class AudioEngine {
   }
 
   _musicStep(theme, step, when, beat) {
+    if (this._musicMode === 'title') { this._titleMusicStep(theme, step, when, beat); return; }
     if (this._musicMode === 'boco') { this._bocoMusicStep(theme, step, when, beat); return; }
     if (this._musicMode === 'boss') { this._bossMusicStep(theme, step, when, beat); return; }
     const bar = Math.floor(step / 16);
@@ -353,6 +376,37 @@ export class AudioEngine {
     const hatEvery = this._chapter >= 3 || theme.percussion === 'bright' ? 2 : 4;
     if (phase % hatEvery === 0) this._voice('music', when, 0.035, 0, 0.018 + this._chapter * 0.0015, 'square', null, true, { type: 'highpass', frequency: 6500 });
     if (phase === 0 && bar % 4 === 0) note(12 + (bar % 8 ? 7 : 0), beat * 10, 0.018, 'sine');
+  }
+
+  _titleMusicStep(theme, step, when, beat) {
+    const bar = Math.floor(step / 16);
+    const phase = step % 16;
+    const root = theme.roots[bar % theme.roots.length];
+    const note = (offset, duration, volume, type = 'triangle', delay = 0) =>
+      this._voice('music', when + delay, duration, midi(root + offset), volume, type);
+
+    if (phase % 2 === 0) {
+      const melody = theme.melody[(bar % 8) * 8 + phase / 2];
+      if (melody !== -1) {
+        note(24 + melody, beat * (phase === 14 ? 3.1 : 1.85), 0.073, 'sawtooth');
+        note(12 + melody, beat * 1.55, 0.027, 'square');
+      }
+      const arpeggio = [0, 7, 12, 16, 19, 16, 12, 7][(phase / 2 + bar) % 8];
+      note(12 + arpeggio, beat * 1.35, 0.038, 'triangle');
+    }
+    if (phase === 0) {
+      note(0, beat * 7.7, 0.13, 'triangle');
+      note(7, beat * 7.7, 0.055, 'sine');
+    } else if (phase === 8) note(bar % 2 ? 5 : 7, beat * 6.8, 0.115, 'triangle');
+    if ([0, 6, 8, 14].includes(phase)) this._voice('music', when, 0.14, 94, phase % 8 ? 0.1 : 0.18, 'sine', 42);
+    if ([4, 12].includes(phase)) {
+      this._voice('music', when, 0.12, 0, 0.065, 'square', null, true, { type: 'highpass', frequency: 1450 });
+      this._voice('music', when, 0.08, 150, 0.028, 'triangle', 72);
+    }
+    if (phase === 15 && bar % 4 === 3) {
+      note(36, beat * 0.8, 0.033, 'triangle');
+      note(43, beat * 1.25, 0.028, 'triangle', beat * 0.7);
+    }
   }
 
   _bocoMusicStep(theme, step, when, beat) {
