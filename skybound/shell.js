@@ -108,7 +108,11 @@ export class Shell {
   }
   invoke(name, ...args) { return this.callbacks[name]?.(...args); }
   safely(action) {
-    try { return action(); } catch (error) { this.showToast(error?.message || 'Could not complete that action.'); return undefined; }
+    try {
+      const result = action();
+      result?.catch?.(error => this.showToast(error?.message || 'Could not complete that action.'));
+      return result;
+    } catch (error) { this.showToast(error?.message || 'Could not complete that action.'); return undefined; }
   }
   slotIndex(slot) {
     if (Number.isInteger(slot) && slot >= 0 && slot < 3) return slot;
@@ -162,8 +166,8 @@ export class Shell {
     menu.append(heading);
     const actions = node('div', 'menu-actions');
     if (this.titleStarted) actions.append(this.button('Play', () => this.showSlots(), 'primary'));
-    else actions.append(this.button('Start', async () => {
-      await this.invoke('onTitleStart');
+    else actions.append(this.button('Start', () => {
+      this.invoke('onTitleStart');
       this.startTitle();
     }, 'primary'));
     actions.append(this.button('Settings', () => this.showSettings(() => this.showTitle(), false)));

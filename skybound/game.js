@@ -124,10 +124,8 @@ class Play extends Phaser.Scene {
       if (data.menu === 'slots') shell.showSlots(); else shell.showTitle();
       audio.resume();
       if (data.menu === 'slots') audio.startMenuMusic(); else audio.startTitleMusic();
-      // Browsers that permit autoplay can begin the title fanfare immediately.
-      // Safari may keep this suspended; AudioEngine retries synchronously on
-      // the first pointer, touch, or keyboard gesture.
-      void audio.unlock().then(ready => { if (ready) shell.startTitle(); });
+      // Keep Web Audio creation inside the explicit Start gesture. Safari can
+      // leave an autoplay resume promise pending indefinitely.
     }
     this.refreshHud();
   }
@@ -1189,10 +1187,9 @@ const begin = (slotIndex, area) => {
 
 shell = new Shell({
   onStart: begin,
-  onTitleStart: async () => {
-    const ready = await audio.unlock();
-    if (ready) audio.startTitleMusic();
-    return ready;
+  onTitleStart: () => {
+    audio.startTitleMusic();
+    void audio.unlock().then(ready => { if (ready) audio.startTitleMusic(); });
   },
   onResume: () => scene()?.resume(),
   onRestart: () => { const play = scene(); if (play?.save) { play.resume(); play.respawn(); } },
