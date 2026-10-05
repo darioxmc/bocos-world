@@ -48,6 +48,27 @@ const playtimeLabel = value => {
   return minutes >= 60 ? `${Math.floor(minutes / 60)}h ${String(minutes % 60).padStart(2, '0')}m` : `${minutes}m ${String(seconds % 60).padStart(2, '0')}s`;
 };
 
+const OPENING_PAGES = [
+  {
+    heading: 'A Quiet Morning',
+    copy: 'Above the meadow, the wind bells fell silent. The Sky Emblems had vanished, and the paths to the high roost were closing.',
+    art: './assets/story/quiet-morning.webp',
+    alt: 'Boco looks up at three silent wind bells as empty Sky Emblem pedestals lead toward the distant high roost.'
+  },
+  {
+    heading: 'A Small Promise',
+    copy: 'Boco tucked a feather beneath one wing. Somewhere beyond the cliffs, an old friend was waiting for the wind to return.',
+    art: './assets/story/small-promise.webp',
+    alt: 'Boco holds a feather on a grassy overlook and gazes across blue cliffs toward a warmly lit roost tower.'
+  },
+  {
+    heading: 'Into the Wind',
+    copy: 'One leap. One brave little wingbeat. Boco set off toward the sky.',
+    art: './assets/story/into-the-wind.webp',
+    alt: 'Boco leaps into a spiral of wind toward floating stone paths and the sunlit high roost.'
+  }
+];
+
 export class Shell {
   constructor({onStart, onTitleStart, onResume, onRestart, onExit, onSettings} = {}) {
     this.callbacks = {onStart, onTitleStart, onResume, onRestart, onExit, onSettings};
@@ -300,17 +321,21 @@ export class Shell {
     menu.append(actions);
   }
   showOpening(index, page = 0) {
-    const pages = [
-      ['A Quiet Morning', 'Above the meadow, the wind bells fell silent. The Sky Emblems had vanished, and the paths to the high roost were closing.'],
-      ['A Small Promise', 'Boco tucked a feather beneath one wing. Somewhere beyond the cliffs, an old friend was waiting for the wind to return.'],
-      ['Into the Wind', 'One leap. One brave little wingbeat. Boco set off toward the sky.']
-    ];
-    const [heading, copy] = pages[page];
+    const {heading, copy, art, alt} = OPENING_PAGES[page];
     const menu = this.open('opening', heading);
-    menu.append(node('span', 'story-number', `${page + 1} / ${pages.length}`), node('p', 'story-copy', copy));
+    this.overlay.classList.add('opening');
+    const figure = node('figure', 'story-frame');
+    const picture = node('img', 'story-picture');
+    picture.src = art;
+    picture.alt = alt;
+    picture.width = 960;
+    picture.height = 538;
+    picture.decoding = 'async';
+    figure.append(picture, node('span', 'story-number', `${page + 1} / ${OPENING_PAGES.length}`));
+    menu.append(figure, node('p', 'story-copy', copy));
     const actions = node('div', 'menu-actions');
-    actions.append(this.button(page === pages.length - 1 ? 'Begin' : 'Next', () => page === pages.length - 1 ? this.start(index, 0) : this.showOpening(index, page + 1), 'primary'));
-    if (page < pages.length - 1) actions.append(this.button('Skip', () => this.start(index, 0)));
+    actions.append(this.button(page === OPENING_PAGES.length - 1 ? 'Begin' : 'Next', () => page === OPENING_PAGES.length - 1 ? this.start(index, 0) : this.showOpening(index, page + 1), 'primary'));
+    if (page < OPENING_PAGES.length - 1) actions.append(this.button('Skip', () => this.start(index, 0)));
     menu.append(actions);
   }
   showVictory(slot, levelIndex, isFinal) {
