@@ -134,7 +134,7 @@ export class Shell {
     this.view = view;
     this.overlay.replaceChildren();
     this.overlay.hidden = false;
-    this.overlay.className = title ? 'title' : '';
+    this.overlay.className = title ? 'title' : view;
     this.overlay.setAttribute('role', 'dialog');
     this.overlay.setAttribute('aria-modal', 'true');
     this.overlay.setAttribute('aria-label', heading);

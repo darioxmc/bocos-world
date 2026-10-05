@@ -130,6 +130,8 @@ body.menu-open .touch-controls { visibility:hidden; }
   .screen, body.touch-visible .screen { grid-column:2; grid-row:1; width:min(calc(var(--available-height) * 4 / 3), var(--available-width), 960px); }
   body.touch-visible .screen { width:min(calc(var(--available-height) * 4 / 3), calc(var(--available-width) - 2 * var(--controls) - 20px)); }
   body.touch-visible .touch-controls { display:contents; }
+  body.menu-open.touch-visible .screen { width:min(calc(var(--available-height) * 4 / 3), var(--available-width), 960px); }
+  body.menu-open.touch-visible .touch-controls { display:none; }
   .control-left { grid-column:1; grid-row:1; }
   .control-right { grid-column:3; grid-row:1; justify-self:center; }
   body.left-handed .control-left { grid-column:3; }
@@ -139,6 +141,18 @@ body.menu-open .touch-controls { visibility:hidden; }
   #overlay { padding:10px 16px; }
   .menu-heading { margin-bottom:7px; font-size:16px; }
   .slot-row { padding:5px 0; }
+  #overlay.slots { padding:6px 10px; overflow:hidden; }
+  .slots .menu { height:100%; max-width:680px; margin:0 auto; display:grid; grid-template-rows:auto repeat(3, minmax(0, 1fr)) auto; gap:2px; }
+  .slots .menu-heading { margin:0; align-self:center; }
+  .slots .slot-row { min-height:0; padding:2px 0; }
+  .slots .slot-main { min-height:0; padding:3px 7px; }
+  .slots .slot-main strong { font-size:11px; }
+  .slots .slot-main small { margin-top:2px; font-size:8px; }
+  .slots .slot-main .slot-summary { gap:1px 8px; line-height:1.25; }
+  .slots .slot-tools { gap:3px; }
+  .slots .slot-tools button { width:28px; min-height:28px; padding:2px; }
+  .slots .menu-actions { margin-top:2px; }
+  .slots .menu-actions > button { min-height:28px; padding:3px 8px; }
   .opening .menu { gap:5px; }
   .opening .story-copy { font-size:11px; line-height:1.35; }
   .opening .menu-actions > button { min-height:30px; padding:4px 8px; }

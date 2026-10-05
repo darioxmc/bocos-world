@@ -100,7 +100,7 @@ manual Pause and desktop focus loss still pause safely.
 gaps in phone landscape/portrait, viewport scale, independent multi-touch
 release, and preservation of native menu gestures.
 `node tools/verify-combat-feedback.mjs` checks actual damage versus armor blocks,
-hit/death/boss flashes, enemy-earned health, attack poses and collision
+hit/death/boss flashes, chance-based enemy flower drops, attack poses and collision
 dimensions, rare flower rules, and the separated health/emblem HUD on phones.
 
 Browser checks cover keyboard movement, gliding, combat, boss vulnerability

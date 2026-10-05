@@ -21,6 +21,8 @@ const hasWindCrest = (save) => emblemCount(save) >= ROOST_EMBLEM_GOAL;
 const maxHealthFor = (save) => Math.max(save?.assists?.extraHealth ? 5 : 3,
   3 + Math.min(2, Math.floor(emblemCount(save) / 4)));
 const BOSS_HEALTH = Object.freeze({ beetle: 4, moth: 5, plant: 5, bird: 6 });
+const ENEMY_RANGE = Object.freeze({ beetle: 72, shellback: 64, hopper: 80, bird: 80, moth: 80 });
+const FLOWER_DROP_CHANCE = Object.freeze({ beetle: 0.2, hopper: 0.2, bird: 0.2, moth: 0.22, plant: 0.28, shellback: 0.3 });
 const BOSS_PATTERNS = Object.freeze({
   beetle: [['charge'], ['stomp', 'charge'], ['feint', 'stomp', 'charge']],
   moth: [['dive'], ['dive', 'cyclone'], ['sweep', 'dive', 'cyclone']],
@@ -57,7 +59,8 @@ class Play extends Phaser.Scene {
     this.glideToggled = false;
     this.deathUntil = 0;
     this.damageCount = 0;
-    this.combatHealingShown = false;
+    this.flowerDropShown = false;
+    this.dropCounter = 0;
     this.maxHealth = maxHealthFor(this.save);
     this.health = this.maxHealth;
     this.attackVictims = new Set();
@@ -175,7 +178,8 @@ class Play extends Phaser.Scene {
       enemy.body.setSize(flying ? 22 : 23, flying ? 14 : 21).setOffset(flying ? 5 : 4, flying ? 10 : 11);
       enemy.body.setAllowGravity(!flying);
       enemy.setData('flying', flying);
-      this.enemyData.set(enemy, { ...entry, startX: entry.x, startY: entry.y, dir: -1, timer: 0, phase: 'patrol', hp: entry.type === 'shellback' ? 2 : 1, dead: false,
+      const range = Math.max(entry.range ?? 65, ENEMY_RANGE[entry.type] || 0);
+      this.enemyData.set(enemy, { ...entry, range, startX: entry.x, startY: entry.y, dir: -1, timer: 0, phase: 'patrol', hp: entry.type === 'shellback' ? 2 : 1, dead: false,
         surfaces: navigationSurfaces(this.level, entry), worldWidth: this.level.width, worldHeight: this.level.height, suspended: false });
     }
   }
@@ -483,44 +487,49 @@ class Play extends Phaser.Scene {
       }
       state.timer -= dt;
       if (state.type === 'bird' || state.type === 'moth') {
-        const flight = state.type === 'bird' ? 25 : 15;
+        const bird = state.type === 'bird';
+        const flight = bird ? 32 : 23;
+        const notice = bird ? 140 : 125;
+        const warning = bird ? 0.45 : 0.55;
+        const diveSpeed = bird ? 135 : 115;
+        const recovery = bird ? 1.8 : 2.2;
         if (Math.abs(enemy.x - state.startX) >= (state.range || 55)) state.dir = enemy.x > state.startX ? -1 : 1;
         body.setVelocityX(state.dir * flight);
-        const bob = state.type === 'bird' ? 5 : 16;
+        const bob = bird ? 5 : 16;
         const targetY = state.startY + Math.sin(this.clock * 2 + state.startX) * bob;
         body.setVelocityY((targetY - enemy.y) * 4);
-        if (state.type === 'bird' && state.phase === 'patrol' && Math.abs(enemy.x - this.player.x) < 100 && state.timer <= 0) {
-          state.phase = 'warn'; state.timer = 0.6;
+        if (state.phase === 'patrol' && Math.abs(enemy.x - this.player.x) < notice && state.timer <= 0) {
+          state.phase = 'warn'; state.timer = warning;
         }
         if (state.phase === 'warn') {
           enemy.setTint(0xffcc78);
           body.setVelocity(0, 0);
-          if (state.timer < 0.08) { state.phase = 'dive'; state.timer = 0.55; state.targetX = this.player.x; state.targetY = Math.min(this.player.y - 14, state.startY + 65); }
+          if (state.timer < 0.08) { state.phase = 'dive'; state.timer = 0.62; state.targetX = this.player.x; state.targetY = Math.min(this.player.y - 14, state.startY + 65); }
         } else if (state.phase === 'dive') {
           enemy.clearTint();
           const angle = Math.atan2(state.targetY - enemy.y, state.targetX - enemy.x);
-          body.setVelocity(Math.cos(angle) * 115, Math.sin(angle) * 115);
-          if (state.timer <= 0) { state.phase = 'patrol'; state.timer = 2.5; }
+          body.setVelocity(Math.cos(angle) * diveSpeed, Math.sin(angle) * diveSpeed);
+          if (state.timer <= 0) { state.phase = 'patrol'; state.timer = recovery; }
         }
         constrainFlight(enemy, state, dt);
       } else if (state.type === 'plant') {
         body.setVelocityX(0);
-        if (state.timer <= 0 && Math.abs(enemy.x - this.player.x) < 210) { state.phase = state.phase === 'warn' ? 'patrol' : 'warn'; state.timer = state.phase === 'warn' ? 0.7 : 2.8; if (state.phase === 'patrol') this.fireSeed(enemy.x, enemy.y - 18, this.player.x, this.player.y - 15, 85); }
+        if (state.timer <= 0 && Math.abs(enemy.x - this.player.x) < 240) { state.phase = state.phase === 'warn' ? 'patrol' : 'warn'; state.timer = state.phase === 'warn' ? 0.55 : 2.25; if (state.phase === 'patrol') this.fireSeed(enemy.x, enemy.y - 18, this.player.x, this.player.y - 15, 100); }
         if (state.phase === 'warn') enemy.setTint(0xffd68c); else enemy.clearTint();
       } else if (state.type === 'hopper') {
         body.setVelocityX(0);
-        if (state.timer <= 0 && Math.abs(enemy.x - this.player.x) < 145 && (body.blocked.down || body.touching.down)) {
+        if (state.timer <= 0 && Math.abs(enemy.x - this.player.x) < 190 && (body.blocked.down || body.touching.down)) {
           state.phase = state.phase === 'warn' ? 'patrol' : 'warn';
-          state.timer = state.phase === 'warn' ? 0.55 : 2.3;
+          state.timer = state.phase === 'warn' ? 0.4 : 1.75;
           if (state.phase === 'patrol') {
             state.dir = this.player.x < enemy.x ? -1 : 1;
-            body.setVelocity(groundDirection(enemy, state, 65, dt) * 65, -210);
+            body.setVelocity(groundDirection(enemy, state, 78, dt) * 78, -225);
           }
         }
-        if (!body.blocked.down && !body.touching.down && state.phase === 'patrol') body.setVelocityX(groundDirection(enemy, state, 65, dt) * 65);
+        if (!body.blocked.down && !body.touching.down && state.phase === 'patrol') body.setVelocityX(groundDirection(enemy, state, 78, dt) * 78);
         if (state.phase === 'warn') enemy.setTint(0xffdb7b); else enemy.clearTint();
       } else {
-        const speed = state.type === 'shellback' ? 22 : 33;
+        const speed = state.type === 'shellback' ? 30 : 46;
         body.setVelocityX(groundDirection(enemy, state, speed, dt) * speed);
       }
       const frame = Math.floor(this.clock * (enemy.getData('flying') ? 10 : 8)) % 4;
@@ -545,22 +554,28 @@ class Play extends Phaser.Scene {
   killEnemy(enemy) {
     const state = this.enemyData.get(enemy);
     if (!state || state.dead) return;
-    if (this.health < this.maxHealth) {
-      this.health++;
-      const wisp = this.add.image(enemy.x, enemy.y - 16, 'health-wisp').setDepth(10);
-      this.tweens.add({ targets: wisp, y: wisp.y - 22, alpha: 0, duration: 520, ease: 'Sine.easeOut', onComplete: () => wisp.destroy() });
-      audio.effect('enemy-heal');
-      this.refreshHud();
-      if (!this.combatHealingShown) {
-        this.combatHealingShown = true;
-        shell.showToast('Enemy defeated - health restored');
-      }
-    }
+    if (Math.random() < (FLOWER_DROP_CHANCE[state.type] || 0)) this.dropFlower(enemy, state);
     state.dead = true;
     enemy.body.enable = false;
     enemy.setTexture(`${state.type}-hit`).clearTint();
     audio.effect('peck');
     this.tweens.add({ targets: enemy, y: enemy.y + 25, angle: this.facing * 60, alpha: 0, delay: 80, duration: 260, onComplete: () => { this.enemyData.delete(enemy); enemy.destroy(); } });
+  }
+
+  dropFlower(enemy, state) {
+    const surfaces = [...this.level.terrain, ...this.level.platforms.filter(rect => !rect.move)]
+      .filter(rect => enemy.x >= rect.x && enemy.x <= rect.x + rect.w && rect.y >= enemy.body.bottom - 4)
+      .sort((a, b) => a.y - b.y);
+    const y = surfaces[0]?.y ?? enemy.body.bottom;
+    const flower = this.pickups.create(enemy.x, y, 'flower').setOrigin(0.5, 1).setDepth(5);
+    flower.refreshBody();
+    flower.setData('kind', 'flower').setData('id', `drop-${state.id || state.type}-${this.dropCounter++}`);
+    const wisp = this.add.image(enemy.x, y - 14, 'health-wisp').setDepth(10);
+    this.tweens.add({ targets: wisp, y: wisp.y - 18, alpha: 0, duration: 420, ease: 'Sine.easeOut', onComplete: () => wisp.destroy() });
+    if (!this.flowerDropShown) {
+      this.flowerDropShown = true;
+      shell.showToast('Enemy dropped a healing flower');
+    }
   }
 
   updateAttack() {

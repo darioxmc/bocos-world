@@ -165,8 +165,8 @@ export function extendLevel(original) {
   if (!CHAPTERS[original.id]) return original;
   const level = structuredClone(original);
   level.springs = level.springs || [];
-  // Rare flowers are now safety nets; ordinary recovery comes from winning
-  // encounters instead of walking through a flower every few seconds.
+  // Fixed flowers are rare safety nets. Small enemies can also drop one,
+  // preserving a reason to fight without making every encounter a free heal.
   level.flowers = level.flowers.filter(point => point.id.endsWith('flower-start') || point.id.endsWith('flower-boss-rest'));
   // Keep one demanding emblem in each opening route. Acts 2, 4, and 6 add one
   // apiece, making exactly four meaningful emblems per main area.
