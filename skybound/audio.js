@@ -88,7 +88,7 @@ export class AudioEngine {
     this._visibilityHandler = () => {
       this._hidden = Boolean(this._document?.hidden);
       if (this._hidden) { this._haltMusic(); this._stopVoices('effect'); }
-      else this._restartMusic();
+      else { this._configureAudioSession(true); this._restartMusic(); }
     };
     this._gestureHandler = () => { void this.unlock(); };
     this._stateHandler = () => {
@@ -96,15 +96,31 @@ export class AudioEngine {
       else this._restartMusic();
     };
     this._document?.addEventListener('visibilitychange', this._visibilityHandler);
-    for (const event of ['pointerdown', 'touchend', 'keydown']) {
+    for (const event of ['click', 'keydown']) {
       this._window?.addEventListener(event, this._gestureHandler, { passive: true });
     }
+  }
+
+  _configureAudioSession(refresh = false) {
+    const session = this._window?.navigator?.audioSession;
+    if (!session || !('type' in session)) return false;
+    try {
+      if (refresh && session.type === 'playback') {
+        session.type = 'ambient';
+        setTimeout(() => {
+          if (this._destroyed) return;
+          try { session.type = 'playback'; } catch { /* Unsupported or no longer available. */ }
+        }, 0);
+      } else session.type = 'playback';
+      return true;
+    } catch { return false; }
   }
 
   _createContext() {
     const Context = globalThis.AudioContext || globalThis.webkitAudioContext ||
       this._window?.AudioContext || this._window?.webkitAudioContext;
     if (!Context) return false;
+    this._configureAudioSession();
     const context = new Context();
     this.context = context;
     this._master = context.createGain();
@@ -136,6 +152,7 @@ export class AudioEngine {
 
   async unlock() {
     if (this._destroyed) return false;
+    this._configureAudioSession();
     if (this._unlockPromise) {
       // A controller-triggered resume may still be waiting for a browser gesture.
       // Retry resume synchronously when a later touch or keyboard event arrives.
@@ -492,7 +509,7 @@ export class AudioEngine {
     this._stopVoices();
     this._stopUnlockSource();
     this._document?.removeEventListener('visibilitychange', this._visibilityHandler);
-    for (const event of ['pointerdown', 'touchend', 'keydown']) this._window?.removeEventListener(event, this._gestureHandler);
+    for (const event of ['click', 'keydown']) this._window?.removeEventListener(event, this._gestureHandler);
     this.context?.removeEventListener?.('statechange', this._stateHandler);
     for (const node of [this._musicGain, this._effectsGain, this._master, this._compressor]) node?.disconnect();
     const context = this.context;

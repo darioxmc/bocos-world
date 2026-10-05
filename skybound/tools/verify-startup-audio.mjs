@@ -8,6 +8,10 @@ const { chromium } = createRequire(import.meta.url)(path.join(runtime, 'playwrig
 const browser = await chromium.launch({ headless: true, channel: 'msedge' });
 
 const safariAudioStub = () => {
+  Object.defineProperty(navigator, 'audioSession', {
+    configurable: true,
+    value: { type: 'ambient' }
+  });
   class AudioNode {
     constructor() { this.gain = { value: 0 }; }
     connect() { return this; }
@@ -15,6 +19,7 @@ const safariAudioStub = () => {
   }
   class SafariAudioContext {
     constructor() {
+      window.__audioCreateEvent = window.event?.type || '';
       this.state = 'suspended';
       this.sampleRate = 48000;
       this.currentTime = 0;
@@ -73,11 +78,17 @@ try {
   await suspended.getByRole('button', { name: 'Play' }).waitFor({ state: 'visible', timeout: 750 });
   assert.equal(await suspended.evaluate(() => skybound.shell.titleStarted), true,
     'a pending Safari resume promise must not block the title screen');
+  const iosActivation = await suspended.evaluate(() => ({
+    event: window.__audioCreateEvent,
+    session: navigator.audioSession.type
+  }));
+  assert.equal(iosActivation.event, 'click', 'iPhone Web Audio must be created by the click gesture');
+  assert.equal(iosActivation.session, 'playback', 'iPhone audio must not be muted by the Ring/Silent switch');
   await suspended.getByRole('button', { name: 'Play' }).click();
   await suspended.getByRole('heading', { name: 'Choose a Save' }).waitFor({ state: 'visible', timeout: 750 });
   await suspended.close();
 
-  console.log('Startup passed: live title music schedules, Start advances immediately, and suspended Safari audio cannot block play.');
+  console.log('Startup passed: music schedules, Start advances, Safari cannot block play, and iPhone uses the playback audio session.');
 } finally {
   await browser.close();
 }
