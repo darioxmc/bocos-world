@@ -502,7 +502,7 @@ export class Shell {
   updateHud(state) {
     if (this.hudState && Object.keys(state).every(key => state[key] === this.hudState[key])) return;
     this.hudState = { ...state };
-    const {area, health, maxHealth, emblems, bossName, bossHealth, bossMax, bossVulnerable, gliding} = state;
+    const {area, health, maxHealth, emblems, bossName, bossHealth, bossMax, bossVulnerable, bossCounterable, gliding} = state;
     document.getElementById('hud-area').textContent = area ?? '';
     const maximum = Math.max(0, Math.min(12, Number(maxHealth) || 3));
     const current = Math.max(0, Math.min(maximum, Number(health) || 0));
@@ -526,7 +526,9 @@ export class Shell {
     const boss = document.getElementById('hud-boss');
     boss.hidden = !bossName || !(bossMax > 0);
     boss.classList.toggle('vulnerable', Boolean(bossVulnerable));
-    document.getElementById('hud-boss-name').textContent = bossName ? `${bossName}${bossVulnerable ? ' - OPEN' : ''}` : '';
+    boss.classList.toggle('counterable', Boolean(bossCounterable));
+    document.getElementById('hud-boss-name').textContent = bossName ?
+      `${bossName}${bossVulnerable ? ' - OPEN' : bossCounterable ? ' - CREST' : ''}` : '';
     const meter = document.getElementById('hud-boss-meter');
     meter.max = Math.max(1, Number(bossMax) || 1); meter.value = Math.max(0, Number(bossHealth) || 0);
     document.getElementById('hud-glide').hidden = !gliding;

@@ -77,9 +77,9 @@ try {
       s.update(0, 1000 / 60);
       return s.health;
     }, phase);
-    assert.equal(health, phase === 'recover' ? 3 : 2, `Contact damage during ${phase}`);
+    assert.equal(health, phase === 'warn' || phase === 'attack' ? 2 : 3, `Contact damage during ${phase}`);
   }
-  console.log('Boss contact: recovery is safe; warning, attack, and return deal damage.');
+  console.log('Boss contact: warning and attack deal damage; recovery and return are safe.');
 
   const phone = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
   const touch = await phone.newPage();

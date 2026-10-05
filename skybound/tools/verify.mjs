@@ -112,7 +112,9 @@ try {
       const hp=s.bossState.hp;
       s.bossState.phase='warn'; s.hitBoss();
       const protectedHp=s.bossState.hp;
-      for(let n=0;n<6;n++) {s.bossState.phase='recover';s.bossState.hitUntil=0;s.hitBoss();}
+      for(let n=0;n<s.bossState.max;n++) {
+        s.bossState.phase='recover';s.bossState.openingHit=false;s.bossState.hitUntil=0;s.hitBoss();
+      }
       return {hp,protectedHp,defeated:s.bossDefeated,gateDisabled:!s.gateZone.body.enable};
     });
     assert.equal(bossCheck.hp,bossCheck.protectedHp);

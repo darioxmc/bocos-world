@@ -47,7 +47,7 @@ try {
     s.bossContact();
     return { overlap, health: s.health };
   });
-  assert.deepEqual(returning, { overlap: true, health: 2 });
+  assert.deepEqual(returning, { overlap: true, health: 3 });
 
   await page.evaluate(() => { skybound.saves.save(0, { area: 1, checkpoint: null }); skybound.scene.scene.restart({ slot: 0, area: 1 }); });
   await page.waitForFunction(() => skybound.scene.areaIndex === 1 && skybound.scene.mode === 'playing');
@@ -165,7 +165,7 @@ try {
     s.updateWindStrikes();
     const enemyHit = state.hp === 1 && s.windStrikes.countActive() === 0;
 
-    s.bossEngaged = true; s.bossDefeated = false; s.bossState.hp = 6; s.bossState.hitUntil = 0;
+    s.bossEngaged = true; s.bossDefeated = false; s.bossState.hp = s.bossState.max; s.bossState.hitUntil = 0;
     s.bossState.phase = 'warn';
     s.launchWindStrike();
     s.windStrikes.getChildren()[0].body.reset(s.boss.body.center.x, s.boss.body.center.y);
@@ -175,9 +175,10 @@ try {
     s.launchWindStrike();
     s.windStrikes.getChildren()[0].body.reset(s.boss.body.center.x, s.boss.body.center.y);
     s.updateWindStrikes();
-    return { texture, enemyHit, armoredBossHealth, openBossHealth: s.bossState.hp };
+    return { texture, enemyHit, armoredBossHealth, openBossHealth: s.bossState.hp, max: s.bossState.max };
   });
-  assert.deepEqual(crestReport, { texture: 'wind-strike', enemyHit: true, armoredBossHealth: 6, openBossHealth: 5 });
+  assert.deepEqual(crestReport, { texture: 'wind-strike', enemyHit: true, armoredBossHealth: crestReport.max,
+    openBossHealth: crestReport.max - 1, max: crestReport.max });
   await page.evaluate(() => skybound.scene.scene.restart({ slot: 0, area: 1 }));
   await page.waitForFunction(() => skybound.scene.areaIndex === 1 && skybound.scene.mode === 'playing');
   const completedReload = await page.evaluate(() => ({ max: skybound.scene.maxHealth,

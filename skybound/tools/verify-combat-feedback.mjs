@@ -38,8 +38,9 @@ try {
     const defeated = state.dead && !enemy.body.enable && enemy.texture.key.endsWith('-hit');
     const enemyHeal = s.health === s.maxHealth && s.children.list.some(child => child.texture?.key === 'health-wisp');
     s.bossEngaged = true; s.bossState.phase = 'recover'; s.bossState.until = s.clock + 2;
+    const bossBefore = s.bossState.hp;
     s.hitBoss();
-    const bossHit = s.bossState.hp === 5 && s.boss.texture.key.endsWith('-hit');
+    const bossHit = s.bossState.hp === bossBefore - 1 && s.bossState.openingHit && s.boss.texture.key.endsWith('-hit');
     s.respawn();
     const reset = !s.boss.texture.key.endsWith('-hit') && s.attackAnimationUntil === 0;
     const flower = s.pickups.getChildren().find(p => p.getData('kind') === 'flower');

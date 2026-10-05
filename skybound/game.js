@@ -20,6 +20,15 @@ const emblemCount = (save) => Math.min(ROOST_EMBLEM_GOAL, save?.emblems?.length 
 const hasWindCrest = (save) => emblemCount(save) >= ROOST_EMBLEM_GOAL;
 const maxHealthFor = (save) => Math.max(save?.assists?.extraHealth ? 5 : 3,
   3 + Math.min(2, Math.floor(emblemCount(save) / 4)));
+const BOSS_HEALTH = Object.freeze({ beetle: 4, moth: 5, plant: 5, bird: 6 });
+const BOSS_PATTERNS = Object.freeze({
+  beetle: [['charge'], ['stomp', 'charge'], ['feint', 'stomp', 'charge']],
+  moth: [['dive'], ['dive', 'cyclone'], ['sweep', 'dive', 'cyclone']],
+  plant: [['seed-fan'], ['root-burst', 'seed-fan'], ['vine-lash', 'root-burst', 'seed-fan']],
+  bird: [['star-dive', 'feather-orbit'], ['feather-orbit', 'star-dive'], ['sky-current', 'star-dive', 'feather-orbit']],
+});
+const bossTier = state => state.hp <= Math.ceil(state.max / 3) ? 3 :
+  state.hp <= Math.ceil(state.max * 2 / 3) ? 2 : 1;
 
 class Play extends Phaser.Scene {
   constructor() { super('Play'); }
@@ -194,10 +203,14 @@ class Play extends Phaser.Scene {
   buildBoss() {
     const spec = this.level.boss;
     this.boss = this.physics.add.sprite(spec.x, spec.y, `boss-${spec.type}`).setOrigin(0.5, 1).setDepth(7);
-    const width = spec.type === 'moth' ? 20 : spec.type === 'bird' ? 38 : 46;
+    const width = spec.type === 'moth' ? 26 : spec.type === 'bird' ? 36 : 44;
     this.boss.body.setSize(width, 44).setOffset((64 - width) / 2, 20).setAllowGravity(false).setImmovable(true);
-    this.bossState = { hp: 6, max: 6, phase: 'sleep', until: 0, started: 0, facing: -1, hitUntil: 0,
-      flashUntil: 0, targetX: 0, targetY: 0, volley: 0, openingShown: false };
+    const health = BOSS_HEALTH[spec.type] || 5;
+    this.bossState = { hp: health, max: health, phase: 'sleep', until: 0, started: 0, facing: -1, hitUntil: 0,
+      flashUntil: 0, targetX: 0, targetY: 0, volley: 0, openingShown: false, openingHit: false,
+      pattern: '', patternIndex: 0, tier: 1, actionDone: false, counterable: false, counterShown: false, guardUntil: 0,
+      hazardXs: [], safeLane: 0 };
+    this.bossTelegraphs = [];
     this.bossCue = this.add.image(spec.x, spec.y - 68, 'boss-warning').setOrigin(0.5, 1).setDepth(9).setVisible(false);
     this.bossOpenCue = this.add.image(spec.x, spec.y - 68, 'boss-vulnerable').setOrigin(0.5, 1).setDepth(9).setVisible(false);
     this.physics.add.overlap(this.player, this.boss, () => this.bossContact());
@@ -561,7 +574,7 @@ class Play extends Phaser.Scene {
       this.hitEnemy(enemy, this.player.x);
     }
     for (const seed of this.seeds.getChildren()) if (overlaps(attack, bodyRect(seed))) seed.destroy();
-    if (this.boss?.active && !this.bossDefeated && overlaps(attack, bodyRect(this.boss))) this.hitBoss();
+    if (this.boss?.active && !this.bossDefeated && overlaps(attack, this.bossHurtRect())) this.hitBoss('attack');
   }
 
   hitEnemy(enemy, sourceX) {
@@ -606,8 +619,8 @@ class Play extends Phaser.Scene {
       for (const seed of this.seeds.getChildren()) {
         if (seed.active && overlaps(bodyRect(strike), bodyRect(seed))) { seed.destroy(); strike.destroy(); spent = true; break; }
       }
-      if (!spent && strike.active && this.boss?.active && !this.bossDefeated && overlaps(bodyRect(strike), bodyRect(this.boss))) {
-        this.hitBoss();
+      if (!spent && strike.active && this.boss?.active && !this.bossDefeated && overlaps(bodyRect(strike), this.bossHurtRect())) {
+        this.hitBoss('wind');
         strike.destroy();
       }
     }
@@ -660,27 +673,67 @@ class Play extends Phaser.Scene {
     this.windStrikes.clear(true, true);
     if (this.bossEngaged && !this.bossDefeated) {
       this.bossEngaged = false;
-      Object.assign(this.bossState, { hp: 6, phase: 'sleep', until: 0, started: 0, hitUntil: 0, flashUntil: 0, volley: 0, openingShown: false });
+      Object.assign(this.bossState, { hp: this.bossState.max, phase: 'sleep', until: 0, started: 0, hitUntil: 0,
+        flashUntil: 0, volley: 0, openingShown: false, openingHit: false, pattern: '', patternIndex: 0,
+        tier: 1, actionDone: false, counterable: false, counterShown: false, guardUntil: 0, hazardXs: [], safeLane: 0 });
       this.boss.body.reset(this.level.boss.x, this.level.boss.y);
       this.setBossTexture(`boss-${this.level.boss.type}`);
       this.boss.clearTint().setAlpha(1);
       this.bossCue.setVisible(false);
       this.bossOpenCue.setVisible(false);
       this.boss.setVelocity(0, 0);
+      this.clearBossTelegraphs();
       for (const ledge of this.bossPlatforms) { ledge.setVisible(false); ledge.body.enable = false; }
       this.cameras.main.setBounds(0, 0, this.level.width, this.level.height);
+      this.followPlayer();
       audio.setMusicChapter(this.currentChapter?.variant || 0);
     }
     this.refreshHud();
   }
 
-  fireSeed(x, y, targetX, targetY, speed = 95) {
+  bossHurtRect() {
+    const width = { beetle: 58, moth: 56, plant: 58, bird: 58 }[this.level.boss.type] || 54;
+    return { x: this.boss.x - width / 2, y: this.boss.y - 58, width, height: 56 };
+  }
+
+  clearBossTelegraphs() {
+    for (const marker of this.bossTelegraphs) marker.destroy();
+    this.bossTelegraphs.length = 0;
+  }
+
+  addBossTelegraph(x, y, width, height, color = 0xffcf70, angle = 0) {
+    const marker = this.add.rectangle(x, y, width, height, color, 0.34).setDepth(6).setRotation(angle)
+      .setStrokeStyle(2, color, 0.9);
+    this.bossTelegraphs.push(marker);
+    return marker;
+  }
+
+  markBossPath(x1, y1, x2, y2, width = 10, color = 0xffcf70) {
+    const dx = x2 - x1, dy = y2 - y1;
+    return this.addBossTelegraph((x1 + x2) / 2, (y1 + y2) / 2,
+      Math.max(8, Math.hypot(dx, dy)), width, color, Math.atan2(dy, dx));
+  }
+
+  fireBossProjectile(x, y, targetX, targetY, speed = 95, texture = 'seed', life = 4) {
     if (this.seeds.countActive() >= 16) return;
-    const seed = this.seeds.create(x, y, 'seed').setDepth(7);
+    const seed = this.seeds.create(x, y, texture).setDepth(7);
     const angle = Math.atan2(targetY - y, targetX - x);
-    seed.body.setSize(6, 6).setOffset(1, 1).setAllowGravity(false);
+    const size = texture === 'root-spike' ? [14, 22] : texture === 'thorn-wave' ? [14, 10] : [8, 8];
+    seed.body.setSize(size[0], size[1], true).setAllowGravity(false);
     seed.setVelocity(Math.cos(angle) * speed, Math.sin(angle) * speed);
-    seed.setData('expires', this.clock + 4);
+    seed.setData('expires', this.clock + life).setData('bossHazard', true);
+    return seed;
+  }
+
+  fireSeed(x, y, targetX, targetY, speed = 95) {
+    return this.fireBossProjectile(x, y, targetX, targetY, speed, 'seed', 4);
+  }
+
+  spawnRootSpike(x, duration = 0.9) {
+    const spike = this.seeds.create(x, this.level.boss.y - 11, 'root-spike').setDepth(7);
+    spike.body.setSize(14, 22, true).setAllowGravity(false);
+    spike.setVelocity(0, 0).setData('expires', this.clock + duration).setData('bossHazard', true);
+    return spike;
   }
 
   startBossIntro() {
@@ -688,6 +741,8 @@ class Play extends Phaser.Scene {
     const arena = spec.arena;
     const state = this.bossState;
     this.bossEngaged = true;
+    this.seeds.clear(true, true);
+    this.clearBossTelegraphs();
     this.mode = 'boss-intro';
     state.phase = 'intro';
     state.started = this.clock;
@@ -701,6 +756,7 @@ class Play extends Phaser.Scene {
     this.cameras.main.pan((this.player.x + this.boss.x) / 2, arena.y + arena.h / 2, 850, 'Sine.easeInOut');
     this.boss.setAlpha(0);
     this.bossOpenCue.setVisible(false);
+    for (const ledge of this.bossPlatforms) { ledge.setVisible(true); ledge.body.enable = true; }
     this.tweens.add({ targets: this.boss, alpha: 1, duration: 520, delay: 180, ease: 'Sine.easeOut' });
     audio.startMusic(this.level.id, 6, 'boss');
     audio.effect('boss');
@@ -713,15 +769,183 @@ class Play extends Phaser.Scene {
     this.setBossTexture(key);
     this.boss.setFlipX(this.player.x < this.boss.x);
     if (this.clock < state.until) return;
-    state.phase = 'warn';
-    state.started = this.clock;
-    state.until = this.clock + 1.25;
     this.mode = 'playing';
     this.physics.resume();
     this.cameras.main.setBounds(this.level.boss.arena.x, Math.max(0, this.level.boss.arena.y - 20), this.level.boss.arena.w, Math.max(240, this.level.boss.arena.h));
-    this.followPlayer();
+    this.cameras.main.stopFollow();
     controls.clear();
     this.previousFeet = this.player.body.bottom;
+    this.beginBossWarning(1.25);
+  }
+
+  beginBossWarning(duration) {
+    const state = this.bossState;
+    const patterns = BOSS_PATTERNS[this.level.boss.type] || [['charge']];
+    state.tier = bossTier(state);
+    const choices = patterns[state.tier - 1];
+    state.pattern = choices[state.patternIndex % choices.length];
+    state.patternIndex++;
+    state.phase = 'warn';
+    state.started = this.clock;
+    state.until = this.clock + (duration ?? Math.max(0.88, 1.18 - state.tier * 0.08));
+    state.volley = 0;
+    state.actionDone = false;
+    state.counterable = this.level.boss.type === 'bird' && hasWindCrest(this.save) &&
+      (state.pattern === 'sky-current' || state.pattern === 'feather-orbit');
+    this.boss.setVelocity(0, 0).clearTint();
+    this.bossCue.setTexture(state.counterable ? 'boss-counter' : 'boss-warning').setVisible(true);
+    if (state.counterable && !state.counterShown) {
+      state.counterShown = true;
+      shell.showToast('Crest signal! A wind strike can break the Starwarden\'s focus');
+    }
+    this.prepareBossPattern();
+  }
+
+  prepareBossPattern() {
+    const { arena } = this.level.boss;
+    const state = this.bossState;
+    const boss = this.boss;
+    const floorY = this.level.boss.y;
+    this.clearBossTelegraphs();
+    state.facing = this.player.x < boss.x ? -1 : 1;
+    state.targetX = Math.max(arena.x + 30, Math.min(arena.x + arena.w - 30, this.player.x));
+    state.targetY = Math.min(floorY - 10, this.player.y - 12);
+    const edgeX = state.facing < 0 ? arena.x + 28 : arena.x + arena.w - 28;
+    if (state.pattern === 'charge' || state.pattern === 'feint' || state.pattern === 'vine-lash') {
+      this.markBossPath(boss.x, floorY - 12, edgeX, floorY - 12, state.pattern === 'vine-lash' ? 18 : 14);
+    } else if (state.pattern === 'stomp') {
+      this.addBossTelegraph(boss.x, floorY - 4, 142, 8);
+    } else if (state.pattern === 'dive' || state.pattern === 'star-dive') {
+      this.markBossPath(boss.x, boss.y - 30, state.targetX, state.targetY, 12,
+        state.pattern === 'star-dive' ? 0xf4dcff : 0xbfeeff);
+    } else if (state.pattern === 'sweep') {
+      state.targetY = floorY - 24;
+      this.addBossTelegraph(arena.x + arena.w / 2, state.targetY, arena.w - 32, 16, 0xbfeeff);
+    } else if (state.pattern === 'cyclone' || state.pattern === 'seed-fan') {
+      const offsets = state.pattern === 'seed-fan' ? [-42, 0, 42] : [-34, 0, 34];
+      state.shotOffsets = offsets;
+      for (const offset of offsets) this.markBossPath(boss.x, boss.y - 34, state.targetX, state.targetY + offset, 6,
+        state.pattern === 'seed-fan' ? 0xeaa17d : 0xbfeeff);
+    } else if (state.pattern === 'root-burst') {
+      const slots = [arena.x + 48, arena.x + 120, arena.x + 200, arena.x + 272, arena.x + 344]
+        .filter(x => x < arena.x + arena.w - 20);
+      state.safeLane = slots.reduce((best, x, index) => Math.abs(x - this.player.x) < Math.abs(slots[best] - this.player.x) ? index : best, 0);
+      state.hazardXs = slots.filter((_x, index) => index !== state.safeLane);
+      for (const x of state.hazardXs) this.addBossTelegraph(x, floorY - 11, 20, 22, 0xe69778);
+    } else if (state.pattern === 'feather-orbit') {
+      const towardPlayer = Math.atan2(state.targetY - (boss.y - 30), state.targetX - boss.x);
+      const angles = Array.from({ length: 8 }, (_, i) => i * Math.PI / 4);
+      state.shotAngles = angles.filter(angle => Math.abs(Math.atan2(Math.sin(angle - towardPlayer), Math.cos(angle - towardPlayer))) > 0.5);
+      for (const angle of state.shotAngles) this.markBossPath(boss.x, boss.y - 30,
+        boss.x + Math.cos(angle) * 108, boss.y - 30 + Math.sin(angle) * 108, 5, 0xe8d5ff);
+    } else if (state.pattern === 'sky-current') {
+      state.shotOffsets = [-44, 0, 44];
+      for (const offset of state.shotOffsets) this.markBossPath(boss.x, boss.y - 34,
+        state.targetX, state.targetY + offset, 7, 0xd8e8ff);
+    }
+  }
+
+  startBossAttack() {
+    const state = this.bossState;
+    const durations = { charge: 1.8, stomp: 1.55, feint: 1.85, dive: 1.55, sweep: 1.5, cyclone: 1.9,
+      'seed-fan': 2.0, 'root-burst': 1.0, 'vine-lash': 1.4, 'star-dive': 1.6,
+      'feather-orbit': 1.35, 'sky-current': 1.7 };
+    state.phase = 'attack';
+    state.started = this.clock;
+    state.until = this.clock + (durations[state.pattern] || 1.5);
+    state.actionDone = false;
+    state.volley = 0;
+    state.counterable = false;
+    this.clearBossTelegraphs();
+    this.bossCue.setVisible(false).setTexture('boss-warning').clearTint();
+    this.boss.clearTint();
+  }
+
+  updateBossCamera() {
+    const camera = this.cameras.main;
+    const arena = this.level.boss.arena;
+    const viewWidth = camera.width / Math.max(0.01, camera.zoom || 1);
+    const midpoint = (this.player.x + this.boss.x) / 2;
+    const target = Math.max(arena.x, Math.min(arena.x + arena.w - viewWidth, midpoint - viewWidth / 2));
+    camera.scrollX += (target - camera.scrollX) * 0.18;
+  }
+
+  updateBossAttack() {
+    const state = this.bossState;
+    const spec = this.level.boss;
+    const arena = spec.arena;
+    const boss = this.boss;
+    const elapsed = this.clock - state.started;
+    const minX = arena.x + 44, maxX = arena.x + arena.w - 44;
+    const speed = 125 + state.tier * 18;
+    if (state.pattern === 'charge') {
+      boss.setVelocity(state.facing * speed, 0);
+      if (boss.x <= minX || boss.x >= maxX) return this.bossRecover(1.55);
+    } else if (state.pattern === 'stomp') {
+      boss.setVelocity(0, 0);
+      if (!state.actionDone && elapsed >= 0.32) {
+        state.actionDone = true;
+        this.fireBossProjectile(boss.x - 24, spec.y - 8, arena.x, spec.y - 8, 150, 'thorn-wave', 1.7);
+        this.fireBossProjectile(boss.x + 24, spec.y - 8, arena.x + arena.w, spec.y - 8, 150, 'thorn-wave', 1.7);
+        audio.effect('hit');
+      }
+    } else if (state.pattern === 'feint') {
+      if (elapsed < 0.28) boss.setVelocity(state.facing * 92, 0);
+      else if (elapsed < 0.62) {
+        boss.setVelocity(0, 0).setTint(0xffd778);
+        this.bossCue.setVisible(true).setPosition(boss.x, boss.y - 66);
+        if (elapsed > 0.5) state.facing = this.player.x < boss.x ? -1 : 1;
+      } else {
+        boss.clearTint(); this.bossCue.setVisible(false);
+        boss.setVelocity(state.facing * (speed + 15), 0);
+        if (boss.x <= minX || boss.x >= maxX) return this.bossRecover(1.45);
+      }
+    } else if (state.pattern === 'dive' || state.pattern === 'star-dive') {
+      const angle = Math.atan2(state.targetY - boss.y, state.targetX - boss.x);
+      boss.setVelocity(Math.cos(angle) * speed, Math.sin(angle) * speed);
+      if (Math.hypot(boss.x - state.targetX, boss.y - state.targetY) < 18 || boss.x <= minX || boss.x >= maxX) return this.bossRecover(1.5);
+    } else if (state.pattern === 'sweep') {
+      boss.setVelocity(state.facing * (speed + 18), (state.targetY - boss.y) * 4);
+      if (boss.x <= minX || boss.x >= maxX) return this.bossRecover(1.45);
+    } else if (state.pattern === 'cyclone' || state.pattern === 'sky-current') {
+      boss.setVelocity(0, 0);
+      const cadence = state.pattern === 'cyclone' ? 0.34 : 0.3;
+      if (elapsed >= 0.18 + state.volley * cadence && state.volley < state.shotOffsets.length) {
+        const offset = state.shotOffsets[state.volley++];
+        this.fireBossProjectile(boss.x, boss.y - 34, state.targetX, state.targetY + offset,
+          state.pattern === 'cyclone' ? 118 : 138, state.pattern === 'cyclone' ? 'wind-shot' : 'star-shot', 2.5);
+      }
+    } else if (state.pattern === 'seed-fan') {
+      boss.setVelocity(0, 0);
+      if (!state.actionDone && elapsed >= 0.22) {
+        state.actionDone = true;
+        const offsets = state.tier === 1 ? [-34, 0, 34] : state.tier === 2 ? [-50, -16, 18, 52] : [-58, -29, 0, 29, 58];
+        for (const offset of offsets) this.fireBossProjectile(boss.x, boss.y - 35,
+          state.targetX, state.targetY + offset, 88 + state.tier * 5, 'seed', 3);
+      }
+    } else if (state.pattern === 'root-burst') {
+      boss.setVelocity(0, 0);
+      if (!state.actionDone && elapsed >= 0.25) {
+        state.actionDone = true;
+        for (const x of state.hazardXs) this.spawnRootSpike(x, 0.72);
+        audio.effect('hit');
+      }
+    } else if (state.pattern === 'vine-lash') {
+      boss.setVelocity(0, 0);
+      if (!state.actionDone && elapsed >= 0.28) {
+        state.actionDone = true;
+        const edge = state.facing < 0 ? arena.x : arena.x + arena.w;
+        this.fireBossProjectile(boss.x + state.facing * 22, spec.y - 9, edge, spec.y - 9, 175, 'thorn-wave', 1.4);
+      }
+    } else if (state.pattern === 'feather-orbit') {
+      boss.setVelocity(0, 0);
+      if (!state.actionDone && elapsed >= 0.2) {
+        state.actionDone = true;
+        for (const angle of state.shotAngles) this.fireBossProjectile(boss.x, boss.y - 30,
+          boss.x + Math.cos(angle) * 100, boss.y - 30 + Math.sin(angle) * 100, 88, 'star-shot', 2.4);
+      }
+    }
+    if (this.clock >= state.until) this.bossRecover(spec.type === 'bird' ? 1.45 : 1.55);
   }
 
   updateBoss(dt) {
@@ -737,41 +961,17 @@ class Play extends Phaser.Scene {
       this.startBossIntro();
       return;
     }
-    const phase = state.hp <= 2 ? 3 : state.hp <= 4 ? 2 : 1;
-    const minX = arena.x + 40, maxX = arena.x + arena.w - 38;
-    this.player.x = Math.max(arena.x + 10, Math.min(this.player.x, arena.x + arena.w - 22));
+    const minX = arena.x + 44, maxX = arena.x + arena.w - 44;
+    this.player.x = Math.max(arena.x + 24, Math.min(this.player.x, arena.x + arena.w - 24));
+    this.updateBossCamera();
+    for (const marker of this.bossTelegraphs) marker.setAlpha(0.2 + (Math.sin(this.clock * 14) + 1) * 0.12);
     if (state.phase === 'warn') {
       boss.setVelocity(0, 0);
-      boss.setTint(Math.floor(this.clock * 6) % 2 ? 0xffa574 : 0xffd778);
+      boss.setTint(state.counterable ? 0x8fe8ff : Math.floor(this.clock * 6) % 2 ? 0xffa574 : 0xffd778);
       this.bossCue.setVisible(true).setPosition(boss.x, boss.y - 66).setAlpha(0.65 + Math.sin(this.clock * 12) * 0.3);
-      if (this.clock >= state.until) {
-        state.phase = 'attack';
-        state.started = this.clock;
-        state.until = this.clock + (spec.type === 'plant' ? 1.2 : 1.8);
-        state.facing = this.player.x < boss.x ? -1 : 1;
-        state.targetX = this.player.x;
-        state.targetY = Math.min(spec.y - 10, this.player.y - 12);
-        state.volley = 0;
-        boss.clearTint();
-        this.bossCue.setVisible(false);
-      }
+      if (this.clock >= state.until) this.startBossAttack();
     } else if (state.phase === 'attack') {
-      if (spec.type === 'beetle') {
-        boss.setVelocity(state.facing * (120 + phase * 20), 0);
-        if (boss.x <= minX || boss.x >= maxX) this.bossRecover(1.9 - phase * 0.15);
-      } else if (spec.type === 'plant') {
-        boss.setVelocity(0, 0);
-        const volley = Math.floor((this.clock - (state.until - 1.2)) / 0.35);
-        if (volley >= state.volley && state.volley < phase + 1) {
-          this.fireSeed(boss.x, boss.y - 35, state.targetX, state.targetY, 90);
-          state.volley++;
-        }
-      } else {
-        const angle = Math.atan2(state.targetY - boss.y, state.targetX - boss.x);
-        boss.setVelocity(Math.cos(angle) * (105 + phase * 15), Math.sin(angle) * (105 + phase * 15));
-        if (Math.hypot(boss.x - state.targetX, boss.y - state.targetY) < 18 || boss.x < minX || boss.x > maxX) this.bossRecover(1.8);
-      }
-      if (this.clock >= state.until) this.bossRecover(1.7);
+      this.updateBossAttack(dt);
     } else if (state.phase === 'recover') {
       boss.setTint(0xfff3b0);
       if (spec.type === 'moth' || spec.type === 'bird') {
@@ -779,13 +979,15 @@ class Play extends Phaser.Scene {
         boss.setVelocityY((restY - boss.y) * 3);
       }
       if (this.clock >= state.until) {
-        state.phase = 'return'; state.started = this.clock; state.until = this.clock + 1.2;
+        this.beginBossReturn();
       }
+    } else if (state.phase === 'stagger' || state.phase === 'enrage') {
+      boss.setVelocity(0, 0).setTint(state.phase === 'enrage' && Math.floor(this.clock * 10) % 2 ? 0xff986b : 0xfff3b0);
+      if (this.clock >= state.until) this.beginBossReturn(state.phase === 'enrage' ? 1.0 : 0.82);
     } else if (state.phase === 'return') {
-      for (const ledge of this.bossPlatforms) { ledge.setVisible(false); ledge.body.enable = false; }
       boss.clearTint();
       boss.setVelocity((spec.x - boss.x) * 3, (spec.y - boss.y) * 3);
-      if (this.clock >= state.until) { state.phase = 'warn'; state.started = this.clock; state.until = this.clock + Math.max(0.75, 1.2 - phase * 0.1); }
+      if (this.clock >= state.until) this.beginBossWarning();
     }
     if (boss.x < minX || boss.x > maxX) { boss.x = Math.max(minX, Math.min(maxX, boss.x)); boss.body.updateFromGameObject(); }
     if (boss.y > spec.y) { boss.y = spec.y; boss.body.updateFromGameObject(); }
@@ -793,13 +995,25 @@ class Play extends Phaser.Scene {
     const animation = this.bossAnimationTexture(spec.type, state);
     this.setBossTexture(`${animation}${this.clock < (state.flashUntil || 0) ? '-hit' : ''}`);
     boss.setAlpha(this.clock < state.hitUntil && Math.floor(this.clock * 12) % 2 ? 0.5 : 1);
-    const open = state.phase === 'recover';
+    const open = state.phase === 'recover' && !state.openingHit;
     this.bossOpenCue.setVisible(open).setPosition(boss.x, boss.y - 67)
       .setAlpha(open ? 0.72 + Math.sin(this.clock * 14) * 0.28 : 0);
   }
 
+  beginBossReturn(duration = 0.9) {
+    const state = this.bossState;
+    state.phase = 'return';
+    state.started = this.clock;
+    state.until = this.clock + duration;
+    state.counterable = false;
+    this.bossOpenCue.setVisible(false);
+    this.bossCue.setVisible(false).setTexture('boss-warning');
+    this.clearBossTelegraphs();
+  }
+
   bossAnimationTexture(type, state) {
-    const phase = state.phase === 'sleep' || state.phase === 'intro' ? 'idle' : state.phase;
+    const phase = state.phase === 'sleep' || state.phase === 'intro' ? 'idle' :
+      state.phase === 'stagger' ? 'recover' : state.phase === 'enrage' ? 'warn' : state.phase;
     const counts = { idle: 4, warn: 4, attack: 6, recover: 4, return: 4 };
     const count = counts[phase] || 4;
     const speed = phase === 'attack' ? 10 : phase === 'warn' ? 7 : 5;
@@ -821,38 +1035,73 @@ class Play extends Phaser.Scene {
     state.phase = 'recover';
     state.started = this.clock;
     state.until = this.clock + duration;
+    state.openingHit = false;
+    state.counterable = false;
     this.boss.setVelocity(0, 0);
+    this.seeds.clear(true, true);
+    this.clearBossTelegraphs();
+    this.bossCue.setVisible(false).setTexture('boss-warning');
     this.bossOpenCue.setVisible(true).setPosition(this.boss.x, this.boss.y - 67).setAlpha(1);
     audio.effect('opening');
     if (!state.openingShown) {
       state.openingShown = true;
       shell.showToast('Opening! Strike while the guardian rests');
     }
-    for (const ledge of this.bossPlatforms) { ledge.setVisible(true); ledge.body.enable = true; }
   }
 
   bossContact() {
     if (!this.bossEngaged || this.bossDefeated || this.mode !== 'playing' || this.deathUntil) return;
     const stomping = isStomp(this.previousFeet, this.previousVelocityY, this.boss.body.top);
-    const dangerous = ['warn', 'attack', 'return'].includes(this.bossState.phase);
+    const dangerous = ['warn', 'attack'].includes(this.bossState.phase);
     if (stomping) {
       this.player.setVelocityY(controls.down('jump') ? -MOVE.jump : -225);
-      if (this.bossState.phase === 'recover') this.hitBoss();
+      if (this.bossState.phase === 'recover') this.hitBoss('stomp');
       else if (dangerous) this.damage(this.boss.x);
     } else if (dangerous) this.damage(this.boss.x);
   }
 
-  hitBoss() {
+  hitBoss(source = 'attack') {
     const state = this.bossState;
-    if (!this.bossEngaged || this.bossDefeated || state.phase !== 'recover' || this.clock < state.hitUntil) return;
+    if (!this.bossEngaged || this.bossDefeated) return false;
+    if (source === 'wind' && this.level.boss.type === 'bird' && state.phase === 'warn' && state.counterable) {
+      state.counterable = false;
+      this.bossRecover(1.55);
+      audio.effect('crest');
+      shell.showToast('Crest counter! The Starwarden is open');
+      return true;
+    }
+    if (state.phase !== 'recover' || state.openingHit || this.clock < state.hitUntil) {
+      if (source !== 'wind' && this.clock >= state.guardUntil) {
+        state.guardUntil = this.clock + 0.25;
+        audio.effect('peck');
+      }
+      return false;
+    }
+    state.openingHit = true;
     state.hitUntil = this.clock + 0.7;
     state.flashUntil = this.clock + 0.24;
     this.setBossTexture(`boss-${this.level.boss.type}-hit`);
     this.boss.clearTint();
     state.hp--;
     audio.effect('hit');
-    if (state.hp > 0) return;
+    this.bossOpenCue.setVisible(false);
+    if (state.hp > 0) {
+      const nextTier = bossTier(state);
+      const advanced = nextTier > state.tier;
+      state.tier = nextTier;
+      if (advanced) state.patternIndex = 0;
+      state.phase = advanced ? 'enrage' : 'stagger';
+      state.started = this.clock;
+      state.until = this.clock + (advanced ? 0.8 : 0.42);
+      this.boss.setVelocity(0, 0);
+      if (advanced) {
+        audio.effect('boss');
+        shell.showToast(`${this.level.boss.name} changes its rhythm!`);
+      }
+      return true;
+    }
     this.bossDefeated = true;
+    this.clearBossTelegraphs();
     this.bossCue.setVisible(false);
     this.bossOpenCue.setVisible(false);
     this.boss.body.enable = false;
@@ -862,6 +1111,7 @@ class Play extends Phaser.Scene {
     this.gateZone.body.enable = false;
     for (const ledge of this.bossPlatforms) { ledge.setVisible(false); ledge.body.enable = false; }
     this.cameras.main.setBounds(0, 0, this.level.width, this.level.height);
+    this.followPlayer();
     this.health = this.maxHealth;
     const defeated = [...new Set([...this.save.defeated, this.level.id])];
     const roostReady = ['meadow', 'cliff', 'canopy'].every(id => defeated.includes(id)) && this.collected.size >= ROOST_EMBLEM_GOAL;
@@ -873,6 +1123,7 @@ class Play extends Phaser.Scene {
     audio.setMusicChapter(6);
     audio.effect('win');
     shell.showToast('Garden restored');
+    return true;
   }
 
   startChapterIntro(chapter) {
@@ -917,7 +1168,8 @@ class Play extends Phaser.Scene {
     }
     shell.updateHud({ area: chapter?.name || this.level.name, health: this.health, maxHealth: this.maxHealth, emblems: this.collected.size,
       bossName: this.bossEngaged && !this.bossDefeated ? this.level.boss.name : '', bossHealth: this.bossState?.hp || 0,
-      bossMax: this.bossState?.max || 6, bossVulnerable: this.bossEngaged && this.bossState?.phase === 'recover', gliding: this.gliding });
+      bossMax: this.bossState?.max || 1, bossVulnerable: this.bossEngaged && this.bossState?.phase === 'recover' && !this.bossState?.openingHit,
+      bossCounterable: this.bossEngaged && Boolean(this.bossState?.counterable), gliding: this.gliding });
   }
 }
 
